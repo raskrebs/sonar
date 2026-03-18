@@ -1,10 +1,16 @@
-![logo](media/logo.png)
---------
+```
+  ███████╗ ██████╗ ███╗   ██╗ █████╗ ██████╗
+  ██╔════╝██╔═══██╗████╗  ██║██╔══██╗██╔══██╗
+  ███████╗██║   ██║██╔██╗ ██║███████║██████╔╝
+  ╚════██║██║   ██║██║╚██╗██║██╔══██║██╔══██╗
+  ███████║╚██████╔╝██║ ╚████║██║  ██║██║  ██║
+  ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝
+```
 
 A developer tool for inspecting local open ports. Resolves Docker container names, shows clickable URLs, and provides filtering, sorting, and real-time monitoring. Supports local port mapping.
 
 ```
-$ sonar
+$ sonar list
 PORT   PROCESS                      CONTAINER                    IMAGE             CPORT   URL
 1780   proxy (traefik:3.0)          my-app-proxy-1               traefik:3.0       80      http://localhost:1780
 3000   next-server (v16.1.6)                                                               http://localhost:3000
@@ -22,6 +28,7 @@ PORT   PROCESS                      CONTAINER                    IMAGE          
 - Hides desktop apps (Figma, Discord, etc.) by default
 - Configurable columns, filtering, and sorting
 - JSON output for scripting
+- Log streaming and process attach for Docker and native services
 - Port forwarding, real-time watch mode, and more
 
 ## Install
@@ -34,7 +41,7 @@ cd sonar
 ./install.sh
 ```
 
-This builds the binary and adds `~/.sonar/bin` to your PATH. Restart your terminal, open a new terminal windor or run `source ~/.zshrc` to start using it.
+This builds the binary and adds `~/.sonar/bin` to your PATH. Restart your terminal, open a new terminal window or run `source ~/.zshrc` to start using it.
 
 To customize the install location:
 
@@ -44,15 +51,15 @@ SONAR_INSTALL_DIR=/usr/local/bin ./install.sh
 
 ## Usage
 
-### List ports (default)
+### List ports
 
 ```sh
-sonar                          # show all ports
-sonar --filter docker          # only Docker ports
-sonar --sort name              # sort by process name
-sonar --json                   # JSON output
-sonar -a                       # include desktop apps
-sonar -c port,compose,image,url  # custom columns
+sonar list                     # show all ports
+sonar list --filter docker     # only Docker ports
+sonar list --sort name         # sort by process name
+sonar list --json              # JSON output
+sonar list -a                  # include desktop apps
+sonar list -c port,compose,image,url  # custom columns
 ```
 
 Available columns: `port`, `process`, `pid`, `type`, `url`, `container`, `image`, `containerport`, `compose`, `project`, `user`, `bind`, `ip`
@@ -80,6 +87,24 @@ sonar watch -i 500ms     # poll every 500ms
 
 Shows the initial table, then prints diffs as ports come and go.
 
+### View logs
+
+```sh
+sonar logs 3000          # stream logs from a process
+sonar logs 3000 -f=false # print recent logs without following
+```
+
+For Docker containers, streams `docker logs`. For native processes, discovers log files via `lsof` and tails them. Falls back to macOS `log stream` or Linux `/proc/<pid>/fd`.
+
+### Attach to a service
+
+```sh
+sonar attach 6873              # interactive shell (Docker) or TCP connection
+sonar attach 6873 --shell bash # use a specific shell for Docker exec
+```
+
+For Docker containers, opens an interactive shell inside the container. For other services, opens a raw TCP connection to the port.
+
 ### Port mapping
 
 ```sh
@@ -96,6 +121,14 @@ sonar kill 3000 -f        # send SIGKILL
 ```
 
 Warns if the port belongs to a Docker container and suggests `docker stop` instead.
+
+### Kill multiple processes
+
+```sh
+sonar kill-all --filter docker              # kill all Docker port processes
+sonar kill-all --project my-app             # kill by Compose project
+sonar kill-all --filter user -y             # skip confirmation
+```
 
 ### Global flags
 
