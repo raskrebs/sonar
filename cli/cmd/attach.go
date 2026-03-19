@@ -22,7 +22,8 @@ var attachCmd = &cobra.Command{
 
 For Docker containers, opens an interactive shell inside the container.
 For other services, opens a raw TCP connection to the port.`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completePort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, err := strconv.Atoi(args[0])
 		if err != nil {

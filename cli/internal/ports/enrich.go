@@ -15,7 +15,7 @@ func Enrich(ports []ListeningPort) {
 			enrichStats(&ports[i])
 		}
 		if ports[i].Type != PortTypeDocker {
-			ports[i].Type = classifyPort(ports[i].Port)
+			ports[i].Type = ClassifyPort(ports[i].Port)
 		}
 		if ports[i].Type != PortTypeDocker {
 			ports[i].IsApp = isDesktopApp(ports[i].Command)
@@ -49,9 +49,9 @@ func getFullCommand(pid int) string {
 	return strings.TrimSpace(string(out))
 }
 
-// classifyPort returns PortTypeSystem for well-known ports (<1024), else PortTypeUser.
+// ClassifyPort returns PortTypeSystem for well-known ports (<1024), else PortTypeUser.
 // Docker classification is handled separately by the docker package.
-func classifyPort(port int) PortType {
+func ClassifyPort(port int) PortType {
 	if port < 1024 {
 		return PortTypeSystem
 	}

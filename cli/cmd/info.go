@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/raskrebs/sonar/internal/display"
 	"github.com/raskrebs/sonar/internal/docker"
@@ -11,25 +12,46 @@ import (
 )
 
 var infoCmd = &cobra.Command{
-	Use:   "info <port>",
-	Short: "Show detailed information about a port",
-	Args:  cobra.ExactArgs(1),
+	Use:               "info <port>",
+	Short:             "Show detailed information about a port",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completePort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, err := strconv.Atoi(args[0])
 		if err != nil {
 			return fmt.Errorf("invalid port: %s", args[0])
 		}
 
-		lp, err := ports.FindByPort(port)
-		if err != nil {
-			return err
-		}
+		infoHost, _ := cmd.Flags().GetString("host")
 
-		// Enrich
-		enriched := []ports.ListeningPort{*lp}
-		docker.EnrichPorts(enriched)
-		ports.Enrich(enriched)
-		*lp = enriched[0]
+		var lp *ports.ListeningPort
+		if infoHost != "" {
+			all, scanErr := ports.ScanRemote(infoHost)
+			if scanErr != nil {
+				return scanErr
+			}
+			for i := range all {
+				if all[i].Port == port {
+					lp = &all[i]
+					break
+				}
+			}
+			if lp == nil {
+				return fmt.Errorf("no process found listening on port %d on %s", port, infoHost)
+			}
+			lp.Type = ports.ClassifyPort(lp.Port)
+		} else {
+			lp, err = ports.FindByPort(port)
+			if err != nil {
+				return err
+			}
+			// Enrich
+			enriched := []ports.ListeningPort{*lp}
+			docker.EnrichPorts(enriched)
+			ports.Enrich(enriched)
+			ports.EnrichHealth(enriched, 2*time.Second)
+			*lp = enriched[0]
+		}
 
 		printField("Port", display.BoldCyan(fmt.Sprintf("%d", lp.Port)))
 		printField("URL", display.Underline(lp.URL()))
@@ -67,6 +89,16 @@ var infoCmd = &cobra.Command{
 		}
 		printField("  Connections", fmt.Sprintf("%d", lp.Connections))
 
+		fmt.Println()
+		fmt.Println(display.Bold("Health:"))
+		printField("  Status", colorHealthInfo(lp.HealthStatus))
+		if lp.HealthCode > 0 {
+			printField("  Status Code", fmt.Sprintf("%d", lp.HealthCode))
+		}
+		if lp.HealthLatency > 0 {
+			printField("  Latency", fmt.Sprintf("%dms", lp.HealthLatency.Milliseconds()))
+		}
+
 		if lp.Type == ports.PortTypeDocker {
 			fmt.Println()
 			fmt.Println(display.Bold("Docker:"))
@@ -91,10 +123,24 @@ var infoCmd = &cobra.Command{
 	},
 }
 
+func colorHealthInfo(status string) string {
+	switch status {
+	case "healthy":
+		return display.Green(status)
+	case "unhealthy", "refused", "timeout":
+		return display.Red(status)
+	case "non-http":
+		return display.Yellow(status)
+	default:
+		return status
+	}
+}
+
 func printField(label, value string) {
 	fmt.Printf("%-16s %s\n", display.Dim(label+":"), value)
 }
 
 func init() {
+	infoCmd.Flags().String("host", "", "Query a remote host via SSH (e.g. user@hostname)")
 	rootCmd.AddCommand(infoCmd)
 }

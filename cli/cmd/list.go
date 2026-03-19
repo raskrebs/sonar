@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/raskrebs/sonar/internal/display"
 	"github.com/raskrebs/sonar/internal/docker"
@@ -18,6 +19,8 @@ var (
 	allFlag        bool
 	columnsFlag    string
 	allColumnsFlag bool
+	healthFlag     bool
+	hostFlag       string
 )
 
 var listCmd = &cobra.Command{
@@ -34,17 +37,35 @@ func init() {
 	listCmd.Flags().StringVarP(&columnsFlag, "columns", "c", "",
 		"Columns to display (comma-separated: "+strings.Join(display.AllColumns, ", ")+")")
 	listCmd.Flags().BoolVar(&allColumnsFlag, "all-columns", false, "Display all available columns")
+	listCmd.Flags().BoolVar(&healthFlag, "health", false, "Run HTTP health checks on each port")
+	listCmd.Flags().StringVar(&hostFlag, "host", "", "Scan a remote host via SSH (e.g. user@hostname)")
 	rootCmd.AddCommand(listCmd)
 }
 
 func listRun(cmd *cobra.Command, args []string) error {
-	results, err := ports.Scan()
-	if err != nil {
-		return err
-	}
+	var results []ports.ListeningPort
+	var err error
 
-	docker.EnrichPorts(results)
-	ports.Enrich(results)
+	if hostFlag != "" {
+		results, err = ports.ScanRemote(hostFlag)
+		if err != nil {
+			return err
+		}
+		// Classify port types only; Docker and process stats are not available over SSH
+		for i := range results {
+			results[i].Type = ports.ClassifyPort(results[i].Port)
+		}
+	} else {
+		results, err = ports.Scan()
+		if err != nil {
+			return err
+		}
+		docker.EnrichPorts(results)
+		ports.Enrich(results)
+		if healthFlag {
+			ports.EnrichHealth(results, 2*time.Second)
+		}
+	}
 
 	// Hide desktop apps unless --all is set
 	if !allFlag {

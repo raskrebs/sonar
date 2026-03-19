@@ -30,10 +30,15 @@ func scanLsof() ([]ListeningPort, error) {
 		return nil, fmt.Errorf("lsof: %w\n%s", err, out)
 	}
 
+	return parseLsof(string(out)), nil
+}
+
+// parseLsof parses the output of lsof -iTCP -sTCP:LISTEN -n -P into ListeningPort entries.
+func parseLsof(output string) []ListeningPort {
 	seen := make(map[int]bool)
 	var results []ListeningPort
 
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Scan() // skip header
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
@@ -86,7 +91,7 @@ func scanLsof() ([]ListeningPort, error) {
 		})
 	}
 
-	return results, nil
+	return results
 }
 
 func scanSS() ([]ListeningPort, error) {
@@ -95,10 +100,15 @@ func scanSS() ([]ListeningPort, error) {
 		return nil, fmt.Errorf("ss: %w\n%s", err, out)
 	}
 
+	return parseSS(string(out)), nil
+}
+
+// parseSS parses the output of ss -tlnp into ListeningPort entries.
+func parseSS(output string) []ListeningPort {
 	seen := make(map[int]bool)
 	var results []ListeningPort
 
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Scan() // skip header
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -162,5 +172,5 @@ func scanSS() ([]ListeningPort, error) {
 		})
 	}
 
-	return results, nil
+	return results
 }

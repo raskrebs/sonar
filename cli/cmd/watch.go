@@ -8,20 +8,24 @@ import (
 
 	"github.com/raskrebs/sonar/internal/display"
 	"github.com/raskrebs/sonar/internal/docker"
+	"github.com/raskrebs/sonar/internal/notify"
 	"github.com/raskrebs/sonar/internal/ports"
 	"github.com/spf13/cobra"
 )
 
 var intervalFlag time.Duration
+var notifyFlag bool
 
 var watchCmd = &cobra.Command{
 	Use:   "watch",
 	Short: "Watch for port changes in real-time",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		showAll, _ := cmd.Flags().GetBool("all")
+		notifyFlag, _ = cmd.Flags().GetBool("notify")
+		watchHost, _ := cmd.Flags().GetString("host")
 
 		// Initial scan
-		current, err := scanAndEnrich()
+		current, err := scanAndEnrichWithHost(watchHost)
 		if err != nil {
 			return err
 		}
@@ -48,7 +52,7 @@ var watchCmd = &cobra.Command{
 				fmt.Println()
 				return nil
 			case <-ticker.C:
-				next, err := scanAndEnrich()
+				next, err := scanAndEnrichWithHost(watchHost)
 				if err != nil {
 					continue
 				}
@@ -65,6 +69,8 @@ var watchCmd = &cobra.Command{
 func init() {
 	watchCmd.Flags().DurationVarP(&intervalFlag, "interval", "i", 2*time.Second, "Poll interval (e.g. 2s, 500ms)")
 	watchCmd.Flags().BoolP("all", "a", false, "Include desktop apps (hidden by default)")
+	watchCmd.Flags().BoolP("notify", "n", false, "Send desktop notifications on port changes")
+	watchCmd.Flags().String("host", "", "Watch a remote host via SSH (e.g. user@hostname)")
 	rootCmd.AddCommand(watchCmd)
 }
 
@@ -75,6 +81,20 @@ func scanAndEnrich() ([]ports.ListeningPort, error) {
 	}
 	docker.EnrichPorts(results)
 	ports.Enrich(results)
+	return results, nil
+}
+
+func scanAndEnrichWithHost(host string) ([]ports.ListeningPort, error) {
+	if host == "" {
+		return scanAndEnrich()
+	}
+	results, err := ports.ScanRemote(host)
+	if err != nil {
+		return nil, err
+	}
+	for i := range results {
+		results[i].Type = ports.ClassifyPort(results[i].Port)
+	}
 	return results, nil
 }
 
@@ -100,6 +120,9 @@ func printDiff(old, new []ports.ListeningPort) {
 				p.PID,
 				p.DisplayName(),
 				display.Underline(p.URL()))
+			if notifyFlag {
+				notify.Send("Port Opened", fmt.Sprintf("Port %d opened (%s)", p.Port, p.DisplayName()))
+			}
 		}
 	}
 
@@ -112,6 +135,9 @@ func printDiff(old, new []ports.ListeningPort) {
 				p.PID,
 				p.DisplayName(),
 				display.Dim(p.URL()))
+			if notifyFlag {
+				notify.Send("Port Closed", fmt.Sprintf("Port %d closed (%s)", p.Port, p.DisplayName()))
+			}
 		}
 	}
 }

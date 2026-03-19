@@ -11,9 +11,10 @@ import (
 )
 
 var openCmd = &cobra.Command{
-	Use:   "open <port>",
-	Short: "Open localhost:port in the default browser",
-	Args:  cobra.ExactArgs(1),
+	Use:               "open <port>",
+	Short:             "Open localhost:port in the default browser",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completePort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, err := strconv.Atoi(args[0])
 		if err != nil {

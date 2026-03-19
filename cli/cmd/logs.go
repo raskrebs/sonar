@@ -17,9 +17,10 @@ import (
 var logsFollow bool
 
 var logsCmd = &cobra.Command{
-	Use:   "logs <port>",
-	Short: "Attach to a process and view its log output",
-	Args:  cobra.ExactArgs(1),
+	Use:               "logs <port>",
+	Short:             "Attach to a process and view its log output",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completePort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, err := strconv.Atoi(args[0])
 		if err != nil {

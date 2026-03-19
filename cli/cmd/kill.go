@@ -13,9 +13,10 @@ import (
 var forceFlag bool
 
 var killCmd = &cobra.Command{
-	Use:   "kill <port>",
-	Short: "Kill the process listening on a given port",
-	Args:  cobra.ExactArgs(1),
+	Use:               "kill <port>",
+	Short:             "Kill the process listening on a given port",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completePort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, err := strconv.Atoi(args[0])
 		if err != nil {

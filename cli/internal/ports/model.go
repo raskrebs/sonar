@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type PortType int
@@ -46,6 +47,11 @@ type ListeningPort struct {
 	Uptime      string  // human-readable uptime
 	State       string  // process state (running, sleeping, etc.)
 	Connections int     // number of established connections on this port
+
+	// Health check fields
+	HealthStatus  string
+	HealthCode    int
+	HealthLatency time.Duration
 
 	// Docker fields (empty if not Docker)
 	DockerContainer      string

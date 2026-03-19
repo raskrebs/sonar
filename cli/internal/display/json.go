@@ -27,6 +27,11 @@ type JSONPort struct {
 	State       string  `json:"state,omitempty"`
 	Connections int     `json:"connections"`
 
+	// Health check fields
+	HealthStatus     string `json:"health_status,omitempty"`
+	HealthCode       int    `json:"health_code,omitempty"`
+	HealthLatencyMs  int64  `json:"health_latency_ms,omitempty"`
+
 	// Docker fields
 	DockerContainer      string `json:"docker_container,omitempty"`
 	DockerImage          string `json:"docker_image,omitempty"`
@@ -55,6 +60,9 @@ func RenderJSON(w io.Writer, pp []ports.ListeningPort) error {
 			Uptime:               p.Uptime,
 			State:                p.State,
 			Connections:          p.Connections,
+			HealthStatus:         p.HealthStatus,
+			HealthCode:           p.HealthCode,
+			HealthLatencyMs:      p.HealthLatency.Milliseconds(),
 			DockerContainer:      p.DockerContainer,
 			DockerImage:          p.DockerImage,
 			DockerComposeService: p.DockerComposeService,

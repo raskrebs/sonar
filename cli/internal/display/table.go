@@ -21,6 +21,7 @@ var AllColumns = []string{
 	"cpu", "mem", "threads", "uptime", "state", "connections",
 	"container", "image", "containerport", "compose", "project",
 	"user", "bind", "ip",
+	"health", "latency",
 }
 
 // TableOptions controls table rendering.
@@ -150,6 +151,10 @@ func columnLabel(col string) string {
 		return "THR"
 	case "connections":
 		return "CONN"
+	case "health":
+		return "HEALTH"
+	case "latency":
+		return "LATENCY"
 	default:
 		return col
 	}
@@ -204,6 +209,13 @@ func columnValue(p ports.ListeningPort, col string) string {
 		return colorState(p.State)
 	case "connections":
 		return fmt.Sprintf("%d", p.Connections)
+	case "health":
+		return colorHealth(p.HealthStatus)
+	case "latency":
+		if p.HealthLatency > 0 {
+			return fmt.Sprintf("%dms", p.HealthLatency.Milliseconds())
+		}
+		return ""
 	default:
 		return ""
 	}
@@ -240,6 +252,19 @@ func colorState(state string) string {
 		return Yellow(state)
 	default:
 		return state
+	}
+}
+
+func colorHealth(status string) string {
+	switch status {
+	case "healthy":
+		return Green(status)
+	case "unhealthy", "refused", "timeout":
+		return Red(status)
+	case "non-http":
+		return Yellow(status)
+	default:
+		return status
 	}
 }
 
