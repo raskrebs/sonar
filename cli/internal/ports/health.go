@@ -15,8 +15,12 @@ type HealthResult struct {
 	Latency    time.Duration
 }
 
-// ProbeHealth performs an HTTP GET to localhost:port and classifies the result.
-func ProbeHealth(port int, timeout time.Duration) HealthResult {
+// ProbeHealth performs an HTTP GET to localhost:port/path and classifies the result.
+// If path is empty, "/" is used.
+func ProbeHealth(port int, path string, timeout time.Duration) HealthResult {
+	if path == "" {
+		path = "/"
+	}
 	client := &http.Client{
 		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -25,7 +29,7 @@ func ProbeHealth(port int, timeout time.Duration) HealthResult {
 	}
 
 	start := time.Now()
-	resp, err := client.Get(fmt.Sprintf("http://localhost:%d/", port))
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%d%s", port, path))
 	latency := time.Since(start)
 
 	if err != nil {
@@ -92,7 +96,7 @@ func EnrichHealth(pp []ListeningPort, timeout time.Duration) {
 		go func(idx int) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			result := ProbeHealth(pp[idx].Port, timeout)
+			result := ProbeHealth(pp[idx].Port, "/", timeout)
 			pp[idx].HealthStatus = result.Status
 			pp[idx].HealthCode = result.StatusCode
 			pp[idx].HealthLatency = result.Latency

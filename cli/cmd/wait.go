@@ -16,7 +16,7 @@ import (
 var (
 	waitTimeoutFlag  time.Duration
 	waitIntervalFlag time.Duration
-	waitHTTPFlag     bool
+	waitHTTPFlag     string
 	waitQuietFlag    bool
 )
 
@@ -27,7 +27,8 @@ var waitCmd = &cobra.Command{
 
 By default, sonar wait checks for a TCP connection. Use --http to wait
 for an HTTP 200-399 response instead (useful for services that accept
-TCP connections before they are truly ready).
+TCP connections before they are truly ready). You can specify a custom
+path with --http=<path> (e.g. --http=/health).
 
 Exit codes:
   0  all ports are ready
@@ -38,6 +39,7 @@ Examples:
   sonar wait 5432
   sonar wait 5432 --timeout 30s
   sonar wait 5432 --http
+  sonar wait 5432 --http=/health
   sonar wait 5432 3000 6379
   sonar wait 5432 --quiet
   sonar wait 5432 --interval 500ms`,
@@ -60,8 +62,8 @@ Examples:
 
 		if !waitQuietFlag {
 			label := "TCP"
-			if waitHTTPFlag {
-				label = "HTTP"
+			if waitHTTPFlag != "" {
+				label = fmt.Sprintf("HTTP (%s)", waitHTTPFlag)
 			}
 			fmt.Printf("%s Waiting for %s on port(s) %v (timeout %s)\n",
 				display.Dim("⏳"), label, portList, waitTimeoutFlag)
@@ -120,9 +122,10 @@ Examples:
 }
 
 // isPortReady checks whether a port is ready via TCP or HTTP.
-func isPortReady(port int, httpCheck bool) bool {
-	if httpCheck {
-		result := ports.ProbeHealth(port, 2*time.Second)
+// If httpPath is non-empty, an HTTP check is performed against that path.
+func isPortReady(port int, httpPath string) bool {
+	if httpPath != "" {
+		result := ports.ProbeHealth(port, httpPath, 2*time.Second)
 		return result.Status == "healthy"
 	}
 
@@ -137,7 +140,8 @@ func isPortReady(port int, httpCheck bool) bool {
 func init() {
 	waitCmd.Flags().DurationVar(&waitTimeoutFlag, "timeout", 30*time.Second, "Maximum time to wait (e.g. 30s, 1m)")
 	waitCmd.Flags().DurationVarP(&waitIntervalFlag, "interval", "i", 1*time.Second, "Polling interval (e.g. 1s, 500ms)")
-	waitCmd.Flags().BoolVar(&waitHTTPFlag, "http", false, "Wait for HTTP 200-399 instead of TCP connection")
+	waitCmd.Flags().StringVar(&waitHTTPFlag, "http", "", "Wait for HTTP 200-399 instead of TCP connection (optionally specify path: --http=/health)")
+	waitCmd.Flags().Lookup("http").NoOptDefVal = "/"
 	waitCmd.Flags().BoolVarP(&waitQuietFlag, "quiet", "q", false, "No output, just exit code (for scripts)")
 	rootCmd.AddCommand(waitCmd)
 }

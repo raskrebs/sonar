@@ -145,11 +145,12 @@ sonar wait 5432                        # block until port is accepting connectio
 sonar wait 5432 3000 6379              # wait for multiple ports
 sonar wait 5432 --timeout 30s         # fail after 30 seconds
 sonar wait 5432 --http                # wait for HTTP 200, not just TCP open
+sonar wait 5432 --http=/health        # check a specific endpoint
 sonar wait 5432 -i 500ms              # custom polling interval
 sonar wait 5432 -q                    # no output, just exit code (for scripts)
 ```
 
-Useful for scripting around `docker compose up -d` or background services. The `--http` flag waits for an actual HTTP 200-399 response, not just a TCP socket, which catches services that accept connections before they're truly ready. Exit codes: `0` (ready), `1` (timeout), `2` (interrupted).
+Useful for scripting around `docker compose up -d` or background services. The `--http` flag waits for an actual HTTP 200-399 response, not just a TCP socket, which catches services that accept connections before they're truly ready. Use `--http=/health` to check a specific endpoint. Exit codes: `0` (ready), `1` (timeout), `2` (interrupted).
 
 ```sh
 docker compose up -d
