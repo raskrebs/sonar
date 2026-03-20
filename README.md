@@ -54,12 +54,12 @@ sonar completion fish | source                 # fish
 ### Nix
 
 ```sh
-nix run github:smallstepman/sonar  # one-time run
+nix run github:RasKrebs/sonar  # one-time run
 ```
 
 Or add to your flake:
 ```nix
-inputs.sonar.url = "github:smallstepman/sonar";
+inputs.sonar.url = "github:RasKrebs/sonar";
 ```
 
 ## Usage
