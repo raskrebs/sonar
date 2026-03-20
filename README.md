@@ -32,15 +32,15 @@ PORT   PROCESS                      CONTAINER                    IMAGE          
 ## Install
 
 ```sh
-curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | sh
+curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | bash
 ```
 
-Downloads the latest binary and adds `~/.sonar/bin` to your PATH. Restart your terminal or `source ~/.zshrc`.
+Downloads the latest binary to `~/.local/bin` and adds it to your PATH if needed. Restart your terminal or `source ~/.zshrc`.
 
 Custom install location:
 
 ```sh
-curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | SONAR_INSTALL_DIR=/usr/local/bin sh
+curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | SONAR_INSTALL_DIR=/usr/local/bin bash
 ```
 
 Shell completions (tab-complete port numbers):
