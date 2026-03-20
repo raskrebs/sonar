@@ -146,6 +146,16 @@ sonar map 6873 3002
 
 Proxies traffic so the service on port 6873 is also available on port 3002.
 
+### Find free ports
+
+```sh
+sonar next                                 # first next free port from 3000
+sonar next 8000                            # first next free port from 8000
+sonar next 3000-3100                       # first next free port in range
+sonar next --count 3                       # 3 consecutive free ports
+sonar next --json                          # JSON output
+```
+
 ### Other
 
 ```sh
