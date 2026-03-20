@@ -49,6 +49,7 @@ var infoCmd = &cobra.Command{
 			enriched := []ports.ListeningPort{*lp}
 			docker.EnrichPorts(enriched)
 			ports.Enrich(enriched)
+			ports.EnrichStats(enriched, docker.AllContainerStatsAsEntries())
 			ports.EnrichHealth(enriched, 2*time.Second)
 			*lp = enriched[0]
 		}

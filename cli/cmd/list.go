@@ -21,6 +21,7 @@ var (
 	allColumnsFlag bool
 	healthFlag     bool
 	hostFlag       string
+	statsFlag      bool
 )
 
 var listCmd = &cobra.Command{
@@ -38,6 +39,7 @@ func init() {
 		"Columns to display (comma-separated: "+strings.Join(display.AllColumns, ", ")+")")
 	listCmd.Flags().BoolVar(&allColumnsFlag, "all-columns", false, "Display all available columns")
 	listCmd.Flags().BoolVar(&healthFlag, "health", false, "Run HTTP health checks on each port")
+	listCmd.Flags().BoolVar(&statsFlag, "stats", false, "Include resource stats (CPU, memory, threads, uptime, state)")
 	listCmd.Flags().StringVar(&hostFlag, "host", "", "Scan a remote host via SSH (e.g. user@hostname)")
 	rootCmd.AddCommand(listCmd)
 }
@@ -62,6 +64,9 @@ func listRun(cmd *cobra.Command, args []string) error {
 		}
 		docker.EnrichPorts(results)
 		ports.Enrich(results)
+		if statsFlag {
+			ports.EnrichStats(results, docker.AllContainerStatsAsEntries())
+		}
 		if healthFlag {
 			ports.EnrichHealth(results, 2*time.Second)
 		}
@@ -85,6 +90,8 @@ func listRun(cmd *cobra.Command, args []string) error {
 		columns = display.AllColumns
 	} else if columnsFlag != "" {
 		columns = parseColumns(columnsFlag)
+	} else if statsFlag {
+		columns = append(display.DefaultColumns, "cpu", "mem", "state", "uptime", "connections")
 	}
 
 	display.RenderTable(os.Stdout, results, display.TableOptions{

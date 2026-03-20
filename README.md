@@ -57,6 +57,7 @@ sonar completion fish | source                 # fish
 
 ```sh
 sonar list                     # show all ports
+sonar list --stats             # include CPU, memory, state, uptime
 sonar list --filter docker     # only Docker ports
 sonar list --sort name         # sort by process name
 sonar list --json              # JSON output
@@ -109,6 +110,7 @@ sonar attach 3000 --shell bash             # specific shell
 
 ```sh
 sonar watch                                # poll every 2s, show diffs
+sonar watch --stats                        # live resource stats (like docker stats)
 sonar watch -i 500ms                       # faster polling
 sonar watch --notify                       # desktop notifications when ports go up/down
 sonar watch --host user@server             # watch a remote machine
@@ -148,9 +150,11 @@ Proxies traffic so the service on port 6873 is also available on port 3002.
 
 ```sh
 sonar open 3000                            # open in browser
-sonar tray                                 # system tray with live port list (macOS)
+sonar tray                                 # menu bar app with live stats (macOS)
 sonar --no-color                           # disable colors (also respects NO_COLOR env)
 ```
+
+The `--stats` flag fetches per-process and per-container resource usage. For Docker containers, it uses the Docker Engine API for accurate per-container metrics. Without `--stats`, sonar returns instantly.
 
 ## Supported platforms
 

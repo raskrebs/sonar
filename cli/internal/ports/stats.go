@@ -9,45 +9,6 @@ import (
 	"time"
 )
 
-// enrichStats populates CPU, memory, threads, uptime, state, and connections for a port.
-func enrichStats(p *ListeningPort) {
-	if p.PID <= 0 {
-		return
-	}
-
-	enrichProcessStats(p)
-	p.Connections = countConnections(p.Port)
-}
-
-// enrichProcessStats uses ps to get CPU%, RSS, threads, state, and start time in one call.
-func enrichProcessStats(p *ListeningPort) {
-	var out []byte
-	var err error
-
-	if runtime.GOOS == "darwin" {
-		// macOS ps doesn't support nlwp; we get thread count separately
-		out, err = exec.Command("ps", "-o", "%cpu=,rss=,state=,lstart=", "-p", strconv.Itoa(p.PID)).Output()
-	} else {
-		out, err = exec.Command("ps", "-o", "%cpu=,rss=,nlwp=,state=,lstart=", "-p", strconv.Itoa(p.PID)).Output()
-	}
-	if err != nil {
-		return
-	}
-
-	line := strings.TrimSpace(string(out))
-	if line == "" {
-		return
-	}
-
-	fields := strings.Fields(line)
-
-	if runtime.GOOS == "darwin" {
-		parseDarwinStats(p, fields)
-	} else {
-		parseLinuxStats(p, fields)
-	}
-}
-
 // parseDarwinStats parses: %cpu rss state lstart...
 // lstart format: "Mon Jan  2 15:04:05 2006" (5 fields)
 func parseDarwinStats(p *ListeningPort, fields []string) {
