@@ -24,6 +24,8 @@ var nextCmd = &cobra.Command{
 By default, searches starting from port 3000. You can specify a start port
 or a range (e.g. 3000-3100). Use --count to find multiple consecutive free ports.
 
+Results reflect a point-in-time snapshot; a port could be allocated by another process before you bind it.
+
 Examples:
   sonar next              # first free port starting from 3000
   sonar next 8000         # first free port starting from 8000
