@@ -62,7 +62,7 @@ func isConnectionRefused(err error) bool {
 		}
 		// Check the string as a fallback — the stdlib wraps the
 		// syscall error in various layers.
-		if fmt.Sprintf("%v", err) == "dial tcp: connection refused" ||
+		if contains(fmt.Sprintf("%v", err), "connection refused") ||
 			contains(err.Error(), "connection refused") {
 			return true
 		}
