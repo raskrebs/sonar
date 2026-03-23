@@ -22,6 +22,7 @@ var (
 	healthFlag     bool
 	hostFlag       string
 	statsFlag      bool
+	bindFlag       bool
 )
 
 var listCmd = &cobra.Command{
@@ -41,6 +42,7 @@ func init() {
 	listCmd.Flags().BoolVar(&healthFlag, "health", false, "Run HTTP health checks on each port")
 	listCmd.Flags().BoolVar(&statsFlag, "stats", false, "Include resource stats (CPU, memory, threads, uptime, state)")
 	listCmd.Flags().StringVar(&hostFlag, "host", "", "Scan a remote host via SSH (e.g. user@hostname)")
+	listCmd.Flags().BoolVarP(&bindFlag, "bind", "b", false, "Display the IP address the port is bound to")
 	rootCmd.AddCommand(listCmd)
 }
 
@@ -92,6 +94,22 @@ func listRun(cmd *cobra.Command, args []string) error {
 		columns = parseColumns(columnsFlag)
 	} else if statsFlag {
 		columns = append(display.DefaultColumns, "cpu", "mem", "state", "uptime", "connections")
+	}
+
+	if bindFlag {
+		if len(columns) == 0 {
+			columns = display.DefaultColumns
+		}
+
+		// Search the list of columns for the word "port", and insert the word "bind" immediately after it
+		for i, v := range columns {
+			if v == "port" {
+				columns = append(columns, "")      // grow by one
+				copy(columns[i+2:], columns[i+1:]) // shift tail right
+				columns[i+1] = "bind"
+				break
+			}
+		}
 	}
 
 	display.RenderTable(os.Stdout, results, display.TableOptions{

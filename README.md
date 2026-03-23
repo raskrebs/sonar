@@ -65,6 +65,7 @@ sonar completion fish | source                 # fish
 
 ```sh
 sonar list                     # show all ports
+sonar list --bind              # include the IP address the port is bound to
 sonar list --stats             # include CPU, memory, state, uptime
 sonar list --filter docker     # only Docker ports
 sonar list --sort name         # sort by process name
