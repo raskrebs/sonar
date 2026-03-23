@@ -228,7 +228,7 @@ func batchEnrichProcessStats(pp []ListeningPort) {
 // batchEnrichProcessStatsWindows uses PowerShell Get-Process to fetch stats.
 func batchEnrichProcessStatsWindows(pidStrs []string, pidMap map[int]*ListeningPort) {
 	psCmd := fmt.Sprintf(
-		"Get-Process -Id %s -ErrorAction SilentlyContinue | Select-Object Id,CPU,WorkingSet64,@{N='ThreadCount';E={$_.Threads.Count}},StartTime | ConvertTo-Csv -NoTypeInformation",
+		"Get-Process -Id %s -ErrorAction SilentlyContinue | Select-Object Id,CPU,WorkingSet64,@{N='ThreadCount';E={$_.Threads.Count}},@{N='StartTime';E={$_.StartTime.ToString('o')}} | ConvertTo-Csv -NoTypeInformation",
 		strings.Join(pidStrs, ","),
 	)
 

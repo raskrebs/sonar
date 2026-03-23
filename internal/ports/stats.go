@@ -76,16 +76,9 @@ func parseWindowsStats(p *ListeningPort, fields []string) {
 	startStr := strings.TrimSpace(fields[3])
 	if startStr != "" {
 		p.StartTime = startStr
-		// PowerShell formats: "3/20/2026 10:30:00 AM" or similar locale-dependent
-		for _, layout := range []string{
-			"1/2/2006 3:04:05 PM",
-			"1/2/2006 15:04:05",
-			"2006-01-02 15:04:05",
-		} {
-			if t, err := time.Parse(layout, startStr); err == nil {
-				p.Uptime = formatDuration(time.Since(t))
-				break
-			}
+		// StartTime is formatted as ISO 8601 via .ToString('o') in the PowerShell command
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			p.Uptime = formatDuration(time.Since(t))
 		}
 	}
 }

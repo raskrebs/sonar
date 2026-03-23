@@ -1,10 +1,17 @@
 # Sonar installer for Windows
-# Usage: irm https://raw.githubusercontent.com/raskrebs/sonar/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
+# TLS 1.2 required for GitHub API (PS 5.1 defaults to TLS 1.0)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $Repo = "raskrebs/sonar"
-$InstallDir = if ($env:SONAR_INSTALL_DIR) { $env:SONAR_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "sonar" }
+if ($env:SONAR_INSTALL_DIR) {
+    $InstallDir = $env:SONAR_INSTALL_DIR
+} else {
+    $InstallDir = Join-Path $env:LOCALAPPDATA "sonar"
+}
 
 function Write-Info($msg) { Write-Host "sonar " -ForegroundColor Cyan -NoNewline; Write-Host $msg }
 function Write-Ok($msg) { Write-Host "  OK " -ForegroundColor Green -NoNewline; Write-Host $msg }
@@ -23,8 +30,8 @@ Write-Info "Detected platform: $Platform"
 
 # Fetch latest release
 Write-Info "Fetching latest release..."
-$Release = try {
-    Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+try {
+    $Release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
 } catch {
     Write-Err "Failed to fetch latest release. Check https://github.com/$Repo/releases"
 }
