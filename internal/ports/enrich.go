@@ -21,7 +21,7 @@ func Enrich(pp []ListeningPort) {
 		}
 		if pp[i].Type != PortTypeDocker {
 			pp[i].Type = ClassifyPort(pp[i].Port)
-			pp[i].IsApp = isDesktopApp(pp[i].Command)
+			pp[i].IsApp = isDesktopApp(pp[i].Command, pp[i].Process, pp[i].PID)
 		}
 	}
 }
@@ -276,8 +276,14 @@ func collectPIDs(pp []ListeningPort) []int {
 	return pids
 }
 
-// isDesktopApp detects if the command belongs to a desktop application.
-func isDesktopApp(command string) bool {
+// isDesktopApp detects if the command belongs to a desktop application or
+// OS-level system service that is not relevant to development.
+func isDesktopApp(command string, process string, pid int) bool {
+	if runtime.GOOS == "windows" {
+		return isWindowsDesktopApp(command, process, pid)
+	}
+
+	// macOS / Linux
 	if command == "" {
 		return false
 	}
@@ -286,6 +292,59 @@ func isDesktopApp(command string) bool {
 	}
 	if strings.HasPrefix(command, "/System/Library/") || strings.HasPrefix(command, "/usr/libexec/") {
 		return true
+	}
+	return false
+}
+
+// isWindowsDesktopApp detects Windows desktop apps and system services.
+// PID 0 (System Idle) and PID 4 (System) own ports like 135, 139, 445.
+func isWindowsDesktopApp(command string, process string, pid int) bool {
+	if pid == 0 || pid == 4 {
+		return true
+	}
+
+	lower := strings.ToLower(command)
+	if lower == "" {
+		lower = strings.ToLower(process)
+	}
+	if lower == "" {
+		// No command or process name — system service not visible without elevation
+		return true
+	}
+
+	// Windows system services
+	if strings.Contains(lower, `\windows\`) {
+		return true
+	}
+	// User-installed desktop apps (AppData\Local houses Discord, Cursor, Slack, etc.)
+	if strings.Contains(lower, `\appdata\`) {
+		return true
+	}
+	// Microsoft Store apps
+	if strings.Contains(lower, `\windowsapps\`) {
+		return true
+	}
+	// Known desktop app executable names (for cases where only the process name is available)
+	knownApps := []string{
+		"discord", "cursor", "slack", "spotify", "figma", "zoom",
+		"teams", "onedrive", "dropbox", "githubdesktop", "notion",
+		"telegram", "whatsapp", "1password", "bitwarden",
+		"chrome", "firefox", "msedge", "brave", "opera",
+		"explorer", "searchhost", "widgets",
+	}
+	// Extract the base executable name without .exe
+	baseName := strings.ToLower(process)
+	if i := strings.LastIndex(baseName, `\`); i >= 0 {
+		baseName = baseName[i+1:]
+	}
+	baseName = strings.TrimSuffix(baseName, ".exe")
+	// Also strip any trailing quote artifacts from netstat parsing
+	baseName = strings.TrimRight(baseName, `"`)
+
+	for _, app := range knownApps {
+		if strings.Contains(baseName, app) {
+			return true
+		}
 	}
 	return false
 }

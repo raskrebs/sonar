@@ -122,6 +122,7 @@ func scanAndEnrichWithHost(host string, withStats bool) ([]ports.ListeningPort, 
 var prevLines int
 
 func renderLiveTable(pp []ports.ListeningPort, columns []string) {
+	enableVTProcessing()
 	if prevLines > 0 {
 		// Move cursor up to the beginning of the previous output
 		fmt.Printf("\033[%dA\r", prevLines)
