@@ -32,15 +32,21 @@ PORT   PROCESS                      CONTAINER                    IMAGE          
 ## Install
 
 ```sh
-curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | bash
+curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.sh | bash
 ```
 
 Downloads the latest binary to `~/.local/bin` and adds it to your PATH if needed. Restart your terminal or `source ~/.zshrc`.
 
+On Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.ps1 | iex
+```
+
 Custom install location:
 
 ```sh
-curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/install.sh | SONAR_INSTALL_DIR=/usr/local/bin bash
+curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.sh | SONAR_INSTALL_DIR=/usr/local/bin bash
 ```
 
 ### Using Go
@@ -213,6 +219,7 @@ sonar tray
 
 - macOS (uses `lsof`)
 - Linux (uses `ss`)
+- Windows (uses `netstat`)
 
 ## Contributors
 

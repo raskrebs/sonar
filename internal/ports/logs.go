@@ -14,7 +14,12 @@ type LogSource struct {
 }
 
 // FindLogSources discovers log files and output streams for a process via lsof.
+// On Windows, log discovery is not supported and returns nil.
 func FindLogSources(pid int) []LogSource {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	out, err := exec.Command("lsof", "-p", strconv.Itoa(pid), "-Fn", "-a").Output()
 	if err != nil {
 		return nil

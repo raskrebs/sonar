@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -87,8 +88,12 @@ func parseSemver(s string) [3]int {
 // FindAssetURL returns the download URL for the current platform.
 func FindAssetURL(release *githubRelease) (string, error) {
 	platform := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
+	suffix := ".tar.gz"
+	if runtime.GOOS == "windows" {
+		suffix = ".zip"
+	}
 	for _, asset := range release.Assets {
-		if strings.Contains(asset.Name, platform) && strings.HasSuffix(asset.Name, ".tar.gz") {
+		if strings.Contains(asset.Name, platform) && strings.HasSuffix(asset.Name, suffix) {
 			return asset.BrowserDownloadURL, nil
 		}
 	}
@@ -119,7 +124,11 @@ func DownloadAndReplace(downloadURL string) error {
 	}
 
 	// Write to a temp file first
-	tmpFile, err := os.CreateTemp("", "sonar-update-*.tar.gz")
+	ext := ".tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = ".zip"
+	}
+	tmpFile, err := os.CreateTemp("", "sonar-update-*"+ext)
 	if err != nil {
 		return fmt.Errorf("cannot create temp file: %w", err)
 	}
@@ -148,6 +157,19 @@ func DownloadAndReplace(downloadURL string) error {
 }
 
 func checkWritable(path string) error {
+	if runtime.GOOS == "windows" {
+		// On Windows, we can't open a running executable for writing.
+		// Check that the directory is writable instead.
+		dir := filepath.Dir(path)
+		tmp, err := os.CreateTemp(dir, ".sonar-write-test-*")
+		if err != nil {
+			return fmt.Errorf("binary directory %s is not writable: %w", dir, err)
+		}
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("cannot stat binary at %s: %w", path, err)

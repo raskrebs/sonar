@@ -29,6 +29,9 @@ var openCmd = &cobra.Command{
 			openCmd = "open"
 		case "linux":
 			openCmd = "xdg-open"
+		case "windows":
+			fmt.Printf("Opening %s\n", display.Underline(url))
+			return exec.Command("cmd", "/c", "start", "", url).Start()
 		default:
 			return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 		}

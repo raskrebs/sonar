@@ -26,6 +26,8 @@ func BuildGraph(listening []ListeningPort) ([]Connection, error) {
 		return buildGraphLsof(listening)
 	case "linux":
 		return buildGraphSS(listening)
+	case "windows":
+		return buildGraphNetstat(listening)
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
@@ -185,6 +187,90 @@ func buildGraphSS(listening []ListeningPort) ([]Connection, error) {
 
 		// Remote address is field 4 (e.g. 127.0.0.1:5432)
 		remote := fields[4]
+		colonIdx := strings.LastIndex(remote, ":")
+		if colonIdx < 0 {
+			continue
+		}
+
+		toPort, err := strconv.Atoi(remote[colonIdx+1:])
+		if err != nil {
+			continue
+		}
+
+		toProcess, ok := portToProcess[toPort]
+		if !ok {
+			continue
+		}
+
+		if toPort == fromPort {
+			continue
+		}
+		key := connKey{fromPort, toPort}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		connections = append(connections, Connection{
+			FromPort:    fromPort,
+			FromProcess: portToProcess[fromPort],
+			ToPort:      toPort,
+			ToProcess:   toProcess,
+		})
+	}
+
+	return connections, nil
+}
+
+// buildGraphNetstat uses `netstat -ano` on Windows to find ESTABLISHED connections.
+func buildGraphNetstat(listening []ListeningPort) ([]Connection, error) {
+	portToProcess := make(map[int]string)
+	pidToPort := make(map[int]int)
+	for _, lp := range listening {
+		portToProcess[lp.Port] = lp.DisplayName()
+		pidToPort[lp.PID] = lp.Port
+	}
+
+	out, err := exec.Command("netstat", "-ano").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("netstat: %w\n%s", err, out)
+	}
+
+	type connKey struct {
+		fromPort int
+		toPort   int
+	}
+	seen := make(map[connKey]bool)
+	var connections []Connection
+
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+
+		proto := strings.ToUpper(fields[0])
+		if proto != "TCP" && proto != "TCPV6" {
+			continue
+		}
+
+		if strings.ToUpper(fields[3]) != "ESTABLISHED" {
+			continue
+		}
+
+		pid, err := strconv.Atoi(fields[4])
+		if err != nil {
+			continue
+		}
+
+		fromPort, ok := pidToPort[pid]
+		if !ok {
+			continue
+		}
+
+		remote := fields[2]
 		colonIdx := strings.LastIndex(remote, ":")
 		if colonIdx < 0 {
 			continue

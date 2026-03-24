@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -131,6 +132,10 @@ func AllContainerStats() map[string]*ContainerStats {
 	containers, err := listContainers()
 	if err != nil || len(containers) == 0 {
 		return result
+	}
+
+	if runtime.GOOS == "windows" {
+		return allContainerStatsCLI()
 	}
 
 	if _, err := os.Stat(dockerSocket); err != nil {

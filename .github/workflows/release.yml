@@ -73,9 +73,36 @@ jobs:
           name: sonar_darwin_${{ matrix.goarch }}
           path: sonar_darwin_${{ matrix.goarch }}.tar.gz
 
+  build-windows:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('{0}-dev', github.ref_name) }}"
+          go build -ldflags="-s -w -X github.com/raskrebs/sonar/internal/selfupdate.Version=${VERSION}" -o sonar.exe .
+          zip sonar_windows_${{ matrix.goarch }}.zip sonar.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sonar_windows_${{ matrix.goarch }}
+          path: sonar_windows_${{ matrix.goarch }}.zip
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux, build-macos]
+    needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -86,4 +113,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: sonar_*.tar.gz
+          files: |
+            sonar_*.tar.gz
+            sonar_*.zip

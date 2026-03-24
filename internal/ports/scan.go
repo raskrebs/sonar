@@ -16,6 +16,8 @@ func Scan() ([]ListeningPort, error) {
 		return scanLsof()
 	case "linux":
 		return scanSS()
+	case "windows":
+		return scanNetstat()
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
@@ -85,6 +87,82 @@ func parseLsof(output string) []ListeningPort {
 			PID:         pid,
 			Process:     process,
 			User:        user,
+			BindAddress: bindAddr,
+			IPVersion:   ipVersion,
+		})
+	}
+
+	return results
+}
+
+func scanNetstat() ([]ListeningPort, error) {
+	out, err := exec.Command("netstat", "-ano").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("netstat: %w\n%s", err, out)
+	}
+
+	return parseNetstat(string(out)), nil
+}
+
+// parseNetstat parses the output of netstat -ano into ListeningPort entries.
+// Expected format:
+//
+//	Proto  Local Address          Foreign Address        State           PID
+//	TCP    0.0.0.0:8000           0.0.0.0:0              LISTENING       12345
+func parseNetstat(output string) []ListeningPort {
+	seen := make(map[int]bool)
+	var results []ListeningPort
+
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+
+		proto := strings.ToUpper(fields[0])
+		if proto != "TCP" && proto != "TCPV6" {
+			continue
+		}
+
+		state := strings.ToUpper(fields[3])
+		if state != "LISTENING" {
+			continue
+		}
+
+		local := fields[1]
+		idx := strings.LastIndex(local, ":")
+		if idx < 0 {
+			continue
+		}
+		port, err := strconv.Atoi(local[idx+1:])
+		if err != nil {
+			continue
+		}
+
+		pid, err := strconv.Atoi(fields[4])
+		if err != nil {
+			continue
+		}
+
+		if seen[port] {
+			continue
+		}
+		seen[port] = true
+
+		bindAddr := local[:idx]
+		ipVersion := "IPv4"
+		if proto == "TCPV6" || strings.Contains(bindAddr, "[") {
+			ipVersion = "IPv6"
+		}
+		if bindAddr == "0.0.0.0" || bindAddr == "[::]" {
+			bindAddr = "0.0.0.0"
+		}
+
+		results = append(results, ListeningPort{
+			Port:        port,
+			PID:         pid,
 			BindAddress: bindAddr,
 			IPVersion:   ipVersion,
 		})
