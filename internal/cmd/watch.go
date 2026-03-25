@@ -151,21 +151,21 @@ func renderLiveTable(pp []ports.ListeningPort, columns []string) {
 }
 
 func printDiff(old, new []ports.ListeningPort) {
-	oldMap := make(map[int]ports.ListeningPort)
+	oldMap := make(map[string]ports.ListeningPort)
 	for _, p := range old {
-		oldMap[p.Port] = p
+		oldMap[p.PortKey()] = p
 	}
 
-	newMap := make(map[int]ports.ListeningPort)
+	newMap := make(map[string]ports.ListeningPort)
 	for _, p := range new {
-		newMap[p.Port] = p
+		newMap[p.PortKey()] = p
 	}
 
 	now := time.Now().Format("15:04:05")
 
 	// New ports
 	for _, p := range new {
-		if _, exists := oldMap[p.Port]; !exists {
+		if _, exists := oldMap[p.PortKey()]; !exists {
 			fmt.Printf("%s %s %-5d  %-20s  %s\n",
 				display.Dim("["+now+"]"),
 				display.Green("+ "+fmt.Sprintf("%-5d", p.Port)),
@@ -173,14 +173,14 @@ func printDiff(old, new []ports.ListeningPort) {
 				p.DisplayName(),
 				display.Underline(p.URL()))
 			if notifyFlag {
-				notify.Send("Port Opened", fmt.Sprintf("Port %d opened (%s)", p.Port, p.DisplayName()))
+				notify.Send("Port Opened", fmt.Sprintf("Port %d opened (%s on %s)", p.Port, p.DisplayName(), p.BindAddress))
 			}
 		}
 	}
 
 	// Removed ports
 	for _, p := range old {
-		if _, exists := newMap[p.Port]; !exists {
+		if _, exists := newMap[p.PortKey()]; !exists {
 			fmt.Printf("%s %s %-5d  %-20s  %s\n",
 				display.Dim("["+now+"]"),
 				display.Red("- "+fmt.Sprintf("%-5d", p.Port)),
@@ -188,7 +188,7 @@ func printDiff(old, new []ports.ListeningPort) {
 				p.DisplayName(),
 				display.Dim(p.URL()))
 			if notifyFlag {
-				notify.Send("Port Closed", fmt.Sprintf("Port %d closed (%s)", p.Port, p.DisplayName()))
+				notify.Send("Port Closed", fmt.Sprintf("Port %d closed (%s on %s)", p.Port, p.DisplayName(), p.BindAddress))
 			}
 		}
 	}
