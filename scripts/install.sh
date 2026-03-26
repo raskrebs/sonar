@@ -46,14 +46,19 @@ detect_platform() {
 PLATFORM="$(detect_platform)"
 info "Detected platform: ${PLATFORM}"
 
-# Find latest release
-info "Fetching latest release..."
-LATEST_URL="https://api.github.com/repos/${REPO}/releases/latest"
+# Find release
+if [ -n "${SONAR_VERSION:-}" ]; then
+    info "Fetching release ${SONAR_VERSION}..."
+    RELEASE_URL="https://api.github.com/repos/${REPO}/releases/tags/${SONAR_VERSION}"
+else
+    info "Fetching latest release..."
+    RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
+fi
 
 if command -v curl &>/dev/null; then
-    RELEASE_JSON="$(curl -sfL "$LATEST_URL")" || error "Failed to fetch latest release. Check https://github.com/${REPO}/releases"
+    RELEASE_JSON="$(curl -sfL "$RELEASE_URL")" || error "Failed to fetch release. Check https://github.com/${REPO}/releases"
 elif command -v wget &>/dev/null; then
-    RELEASE_JSON="$(wget -qO- "$LATEST_URL")" || error "Failed to fetch latest release. Check https://github.com/${REPO}/releases"
+    RELEASE_JSON="$(wget -qO- "$RELEASE_URL")" || error "Failed to fetch release. Check https://github.com/${REPO}/releases"
 else
     error "curl or wget is required"
 fi

@@ -28,12 +28,18 @@ $Arch = switch ($env:PROCESSOR_ARCHITECTURE) {
 $Platform = "windows_$Arch"
 Write-Info "Detected platform: $Platform"
 
-# Fetch latest release
-Write-Info "Fetching latest release..."
+# Fetch release
+if ($env:SONAR_VERSION) {
+    Write-Info "Fetching release $($env:SONAR_VERSION)..."
+    $ReleaseUrl = "https://api.github.com/repos/$Repo/releases/tags/$($env:SONAR_VERSION)"
+} else {
+    Write-Info "Fetching latest release..."
+    $ReleaseUrl = "https://api.github.com/repos/$Repo/releases/latest"
+}
 try {
-    $Release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+    $Release = Invoke-RestMethod $ReleaseUrl
 } catch {
-    Write-Err "Failed to fetch latest release. Check https://github.com/$Repo/releases"
+    Write-Err "Failed to fetch release. Check https://github.com/$Repo/releases"
 }
 
 # Find the right asset
