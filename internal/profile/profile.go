@@ -9,6 +9,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// validateName rejects profile names that contain path separators or traversal components.
+func validateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("profile name must not be empty")
+	}
+	if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || name == ".." || name == "." {
+		return fmt.Errorf("invalid profile name %q: must not contain path separators or traversal", name)
+	}
+	return nil
+}
+
 // PortEntry describes a single port within a profile.
 type PortEntry struct {
 	Port       int    `yaml:"port"`
@@ -35,6 +46,9 @@ func ProfileDir() string {
 
 // Load reads a profile by name from the profiles directory.
 func Load(name string) (*Profile, error) {
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(ProfileDir(), name+".yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,6 +89,9 @@ func List() ([]string, error) {
 
 // Save writes a profile to the profiles directory.
 func Save(p *Profile) error {
+	if err := validateName(p.Name); err != nil {
+		return err
+	}
 	dir := ProfileDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("could not create profiles directory: %w", err)
@@ -94,6 +111,9 @@ func Save(p *Profile) error {
 
 // Delete removes a profile by name.
 func Delete(name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	path := filepath.Join(ProfileDir(), name+".yaml")
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("could not delete profile %q: %w", name, err)
