@@ -9,7 +9,8 @@ import (
 // ScanRemote discovers all TCP ports in LISTEN state on a remote host via SSH.
 // It tries ss first, then falls back to lsof.
 func ScanRemote(host string) ([]ListeningPort, error) {
-	cmd := exec.Command("ssh", host, "ss -tlnp 2>/dev/null || lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null")
+	// "--" prevents host from being interpreted as an SSH flag (e.g. -oProxyCommand=...)
+	cmd := exec.Command("ssh", "--", host, "ss -tlnp 2>/dev/null || lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if len(out) == 0 {
