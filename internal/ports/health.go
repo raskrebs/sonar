@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -62,24 +63,11 @@ func isConnectionRefused(err error) bool {
 		}
 		// Check the string as a fallback — the stdlib wraps the
 		// syscall error in various layers.
-		if contains(fmt.Sprintf("%v", err), "connection refused") ||
-			contains(err.Error(), "connection refused") {
+		if strings.Contains(fmt.Sprintf("%v", err), "connection refused") ||
+			strings.Contains(err.Error(), "connection refused") {
 			return true
 		}
 		break
-	}
-	return false
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
 	}
 	return false
 }
