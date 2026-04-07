@@ -22,6 +22,8 @@ var (
 	healthFlag     bool
 	hostFlag       string
 	statsFlag      bool
+	ipv4Flag       bool
+	ipv6Flag       bool
 )
 
 var listCmd = &cobra.Command{
@@ -41,6 +43,8 @@ func init() {
 	listCmd.Flags().BoolVar(&healthFlag, "health", false, "Run HTTP health checks on each port")
 	listCmd.Flags().BoolVar(&statsFlag, "stats", false, "Include resource stats (CPU, memory, threads, uptime, state)")
 	listCmd.Flags().StringVar(&hostFlag, "host", "", "Scan a remote host via SSH (e.g. user@hostname)")
+	listCmd.Flags().BoolVarP(&ipv4Flag, "ipv4", "4", false, "Show only IPv4 ports")
+	listCmd.Flags().BoolVarP(&ipv6Flag, "ipv6", "6", false, "Show only IPv6 ports")
 	rootCmd.AddCommand(listCmd)
 }
 
@@ -79,6 +83,12 @@ func listRun(cmd *cobra.Command, args []string) error {
 
 	if filterFlag != "" {
 		results = display.FilterPorts(results, filterFlag)
+	}
+
+	if ipv4Flag {
+		results = filterByIPVersion(results, "IPv4")
+	} else if ipv6Flag {
+		results = filterByIPVersion(results, "IPv6")
 	}
 
 	if jsonFlag {
@@ -121,6 +131,16 @@ func excludeApps(pp []ports.ListeningPort) []ports.ListeningPort {
 		}
 	}
 	return result
+}
+
+func filterByIPVersion(pp []ports.ListeningPort, ver string) []ports.ListeningPort {
+	var out []ports.ListeningPort
+	for _, p := range pp {
+		if p.IPVersion == ver {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ValidateColumns checks that all column names are valid.
