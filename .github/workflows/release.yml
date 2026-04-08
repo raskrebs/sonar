@@ -116,3 +116,84 @@ jobs:
           files: |
             sonar_*.tar.gz
             sonar_*.zip
+
+  bump-homebrew:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v5
+        with:
+          repository: raskrebs/homebrew-sonar
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          BASE="https://github.com/raskrebs/sonar/releases/download/${TAG}"
+
+          declare -A SHAS
+          for asset in \
+            sonar_darwin_arm64.tar.gz \
+            sonar_darwin_amd64.tar.gz \
+            sonar_linux_arm64.tar.gz \
+            sonar_linux_amd64.tar.gz; do
+            curl -fsSL -o "$asset" "${BASE}/${asset}"
+            SHAS[$asset]=$(sha256sum "$asset" | awk '{print $1}')
+          done
+
+          FORMULA=tap/Formula/sonar.rb
+          python3 - <<EOF
+          import re, os
+          path = "$FORMULA"
+          version = "$VERSION"
+          tag = "$TAG"
+          shas = {
+              "darwin_arm64": "${SHAS[sonar_darwin_arm64.tar.gz]}",
+              "darwin_amd64": "${SHAS[sonar_darwin_amd64.tar.gz]}",
+              "linux_arm64":  "${SHAS[sonar_linux_arm64.tar.gz]}",
+              "linux_amd64":  "${SHAS[sonar_linux_amd64.tar.gz]}",
+          }
+          src = open(path).read()
+          src = re.sub(r'version "[^"]+"', f'version "{version}"', src, count=1)
+          for key, sha in shas.items():
+              # update url for this arch
+              src = re.sub(
+                  rf'(sonar_{key}\.tar\.gz")\s*\n(\s*)sha256 "[0-9a-f]+"',
+                  rf'\1\n\2sha256 "{sha}"',
+                  src,
+              )
+          # bump tag in all release URLs
+          src = re.sub(r'/releases/download/v[^/]+/', f'/releases/download/{tag}/', src)
+          open(path, "w").write(src)
+          EOF
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No formula changes"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "bump-${TAG}"
+          git add Formula/sonar.rb
+          git commit -m "sonar ${TAG}"
+          git push origin "bump-${TAG}"
+          gh pr create \
+            --title "sonar ${TAG}" \
+            --body "Automated formula bump for sonar ${TAG}." \
+            --base main \
+            --head "bump-${TAG}"
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
