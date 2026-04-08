@@ -7,3 +7,4 @@ sonar-tray
 *.tar.gz
 dist/
 install-local.sh
+.claude
