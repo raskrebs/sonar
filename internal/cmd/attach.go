@@ -27,7 +27,9 @@ For other services, opens a raw TCP connection to the port.`,
 			return fmt.Errorf("invalid port: %s", args[0])
 		}
 
-		lp, err := ports.FindByPort(port)
+		bindIP, _ := cmd.Flags().GetString("ip")
+
+		lp, err := ports.FindByPort(port, bindIP)
 		if err != nil {
 			return err
 		}
@@ -50,6 +52,7 @@ For other services, opens a raw TCP connection to the port.`,
 
 func init() {
 	attachCmd.Flags().StringVar(&attachShell, "shell", "", "Shell to use for Docker exec (default: auto-detect sh/bash)")
+	attachCmd.Flags().String("ip", "", "Specify bind address when a port is bound to multiple IPs")
 	rootCmd.AddCommand(attachCmd)
 }
 

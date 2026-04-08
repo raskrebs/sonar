@@ -34,17 +34,19 @@ var downCmd = &cobra.Command{
 		docker.EnrichPorts(results)
 		ports.Enrich(results)
 
-		// Build map of port -> ListeningPort
-		portMap := make(map[int]*ports.ListeningPort)
+		// Build map of port -> ListeningPorts
+		portMap := make(map[int][]*ports.ListeningPort)
 		for i := range results {
-			portMap[results[i].Port] = &results[i]
+			portMap[results[i].Port] = append(portMap[results[i].Port], &results[i])
 		}
 
 		// Find which profile ports are actually running
 		var active []ports.ListeningPort
 		for _, entry := range prof.Ports {
-			if lp, ok := portMap[entry.Port]; ok {
-				active = append(active, *lp)
+			if lps, ok := portMap[entry.Port]; ok {
+				for _, lp := range lps {
+					active = append(active, *lp)
+				}
 			}
 		}
 
