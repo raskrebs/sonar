@@ -31,6 +31,16 @@ PORT   PROCESS                      CONTAINER                    IMAGE          
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```sh
+brew install raskrebs/sonar/sonar
+```
+
+On macOS this also installs the `sonar-tray` menu bar app.
+
+### Install script
+
 ```sh
 curl -sfL https://raw.githubusercontent.com/raskrebs/sonar/main/scripts/install.sh | bash
 ```
