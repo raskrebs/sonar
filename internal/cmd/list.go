@@ -45,6 +45,7 @@ func init() {
 	listCmd.Flags().StringVar(&hostFlag, "host", "", "Scan a remote host via SSH (e.g. user@hostname)")
 	listCmd.Flags().BoolVarP(&ipv4Flag, "ipv4", "4", false, "Show only IPv4 ports")
 	listCmd.Flags().BoolVarP(&ipv6Flag, "ipv6", "6", false, "Show only IPv6 ports")
+	listCmd.MarkFlagsMutuallyExclusive("ipv4", "ipv6")
 	rootCmd.AddCommand(listCmd)
 }
 

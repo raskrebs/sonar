@@ -142,7 +142,7 @@ func columnLabel(col string) string {
 	case "bind":
 		return "BIND"
 	case "ip":
-		return "FAMILY"
+		return "IPVER"
 	case "cpu":
 		return "CPU%"
 	case "mem":
