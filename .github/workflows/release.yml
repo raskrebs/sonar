@@ -178,6 +178,7 @@ jobs:
         working-directory: tap
         env:
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
           if git diff --quiet; then
@@ -195,5 +196,3 @@ jobs:
             --body "Automated formula bump for sonar ${TAG}." \
             --base main \
             --head "bump-${TAG}"
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
