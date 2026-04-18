@@ -76,6 +76,13 @@ func interpreterAwareBasename(cmd string) string {
 		if name := extractRunnerSubcommand(parts); name != "" {
 			return name
 		}
+		// java -cp/-classpath: skip the classpath value, return main class.
+		if base == "java" {
+			if name := extractJavaMainClass(parts); name != "" {
+				return name
+			}
+			return base
+		}
 		// `python /path/to/script.py arg1`: use the script basename.
 		if name := extractScriptArg(parts); name != "" {
 			return name
@@ -134,6 +141,31 @@ func extractScriptArg(parts []string) string {
 			continue
 		}
 		return filepath.Base(arg)
+	}
+	return ""
+}
+
+// extractJavaMainClass handles java command lines.
+// Returns the main class for -cp/-classpath invocations,
+// the jar basename for -jar, or "" if no main class found.
+func extractJavaMainClass(parts []string) string {
+	for i := 1; i < len(parts); i++ {
+		arg := parts[i]
+		if arg == "-jar" {
+			if i+1 < len(parts) {
+				return filepath.Base(parts[i+1])
+			}
+			return ""
+		}
+		if arg == "-cp" || arg == "-classpath" {
+			i++ // skip the classpath value
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		// first non-flag, non-classpath-value token is the main class
+		return arg
 	}
 	return ""
 }

@@ -91,6 +91,28 @@ func TestResolveProcessName(t *testing.T) {
 			want: "server.js",
 		},
 
+		// java
+		{
+			name: "java -cp classpath ClassName",
+			cmd:  "/usr/bin/java -cp dep1.jar:dep2.jar:dep3.jar com.myapp.SomeClass",
+			want: "com.myapp.SomeClass",
+		},
+		{
+			name: "java -classpath classpath ClassName",
+			cmd:  "java -classpath /path/to/dep1.jar:/path/to/dep2.jar com.example.Main",
+			want: "com.example.Main",
+		},
+		{
+			name: "java -jar app.jar",
+			cmd:  "java -jar /path/to/app.jar",
+			want: "app.jar",
+		},
+		{
+			name: "java with no class",
+			cmd:  "java",
+			want: "java",
+		},
+
 		// Cwd should not be added when name already starts with it
 		{
 			name: "no double-prefix when name already includes cwd",
