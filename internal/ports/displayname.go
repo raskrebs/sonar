@@ -146,8 +146,9 @@ func extractScriptArg(parts []string) string {
 }
 
 // extractJavaMainClass handles java command lines.
-// Returns the main class for -cp/-classpath invocations,
-// the jar basename for -jar, or "" if no main class found.
+// Returns the main class for -cp/-classpath/--class-path invocations, the
+// main class for -m/--module (module/Class), the jar basename for -jar,
+// or "" if no target is found.
 func extractJavaMainClass(parts []string) string {
 	for i := 1; i < len(parts); i++ {
 		arg := parts[i]
@@ -157,17 +158,39 @@ func extractJavaMainClass(parts []string) string {
 			}
 			return ""
 		}
-		if arg == "-cp" || arg == "-classpath" {
-			i++ // skip the classpath value
+		// -m/--module <module>[/<mainclass>]: the target is the value itself.
+		if arg == "-m" || arg == "--module" {
+			if i+1 < len(parts) {
+				return javaModuleTarget(parts[i+1])
+			}
+			return ""
+		}
+		if v, ok := strings.CutPrefix(arg, "--module="); ok {
+			return javaModuleTarget(v)
+		}
+		// Flags that take a separate value we must skip so it isn't
+		// mistaken for the main class.
+		if arg == "-cp" || arg == "-classpath" || arg == "--class-path" ||
+			arg == "-p" || arg == "--module-path" {
+			i++
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}
-		// first non-flag, non-classpath-value token is the main class
+		// First non-flag, non-value token is the main class.
 		return arg
 	}
 	return ""
+}
+
+// javaModuleTarget extracts the main class from a `-m` value of the form
+// `module/ClassName`, or returns the module name when no class is given.
+func javaModuleTarget(v string) string {
+	if _, class, ok := strings.Cut(v, "/"); ok {
+		return class
+	}
+	return v
 }
 
 // augmentWithCwd prefixes the name with the cwd's basename when that adds

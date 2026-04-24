@@ -112,6 +112,51 @@ func TestResolveProcessName(t *testing.T) {
 			cmd:  "java",
 			want: "java",
 		},
+		{
+			name: "java --class-path long form",
+			cmd:  "java --class-path dep1.jar:dep2.jar com.example.Main",
+			want: "com.example.Main",
+		},
+		{
+			name: "java JVM flags before -cp",
+			cmd:  "java -Xmx1g -Dfoo=bar -cp app.jar com.example.Main",
+			want: "com.example.Main",
+		},
+		{
+			name: "java main class with trailing args",
+			cmd:  "java -cp app.jar com.example.Main --port 8080",
+			want: "com.example.Main",
+		},
+		{
+			name: "java bare main class no flags",
+			cmd:  "java com.example.Main",
+			want: "com.example.Main",
+		},
+		{
+			name: "java -cp at end with no value",
+			cmd:  "java -cp",
+			want: "java",
+		},
+		{
+			name: "java -m module/class",
+			cmd:  "java -p mods -m com.foo/com.foo.Main",
+			want: "com.foo.Main",
+		},
+		{
+			name: "java --module long form",
+			cmd:  "java --module-path mods --module com.foo/com.foo.Main",
+			want: "com.foo.Main",
+		},
+		{
+			name: "java --module=value equals form",
+			cmd:  "java --module-path mods --module=com.foo/com.foo.Main",
+			want: "com.foo.Main",
+		},
+		{
+			name: "java -m module only no class",
+			cmd:  "java -m com.foo",
+			want: "com.foo",
+		},
 
 		// Cwd should not be added when name already starts with it
 		{
