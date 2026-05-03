@@ -23,7 +23,9 @@ var killCmd = &cobra.Command{
 			return fmt.Errorf("invalid port: %s", args[0])
 		}
 
-		lp, err := ports.FindByPort(port)
+		bindIP, _ := cmd.Flags().GetString("ip")
+
+		lp, err := ports.FindByPort(port, bindIP)
 		if err != nil {
 			return err
 		}
@@ -56,7 +58,7 @@ var killCmd = &cobra.Command{
 		fmt.Printf("Killing %s (PID %d) on port %d with %s\n",
 			display.Bold(lp.DisplayName()), lp.PID, port, sigName)
 
-		if err := ports.Kill(port, forceFlag); err != nil {
+		if err := ports.Kill(port, bindIP, forceFlag); err != nil {
 			return err
 		}
 
@@ -67,5 +69,6 @@ var killCmd = &cobra.Command{
 
 func init() {
 	killCmd.Flags().BoolVarP(&forceFlag, "force", "f", false, "Send SIGKILL instead of SIGTERM")
+	killCmd.Flags().String("ip", "", "Specify bind address when a port is bound to multiple IPs")
 	rootCmd.AddCommand(killCmd)
 }

@@ -62,9 +62,30 @@ type ListeningPort struct {
 	DockerContainerPort  int
 }
 
-// URL returns the localhost URL for this port.
+// PortKey returns a unique identifier for this listening socket (port + bind address).
+func (lp *ListeningPort) PortKey() string {
+	return fmt.Sprintf("%d:%s", lp.Port, lp.BindAddress)
+}
+
+// URL returns the HTTP URL for this port using its bind address.
+// For wildcard binds (0.0.0.0), localhost is used.
 func (lp *ListeningPort) URL() string {
-	return fmt.Sprintf("http://localhost:%d", lp.Port)
+	host := lp.BindAddress
+	if host == "" || host == "0.0.0.0" || host == "[::]" {
+		host = "localhost"
+	}
+	return fmt.Sprintf("http://%s:%d", host, lp.Port)
+}
+
+// FindAllByPort returns all listening entries matching the given port number.
+func FindAllByPort(port int, all []ListeningPort) []ListeningPort {
+	var matches []ListeningPort
+	for _, p := range all {
+		if p.Port == port {
+			matches = append(matches, p)
+		}
+	}
+	return matches
 }
 
 // DisplayName returns the best human-readable name for the process.
