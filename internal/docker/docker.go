@@ -37,7 +37,9 @@ func EnrichPorts(pp []ports.ListeningPort) {
 		return
 	}
 
-	// Build a map of host port -> container info
+	// Build a map of host port -> container info.
+	// Multiple listening entries may share the same port number (different bind addresses),
+	// so we match on port number — all binds of a Docker-published port get enriched.
 	hostPortMap := make(map[int]*container)
 	mappingMap := make(map[int]portMapping)
 	for i := range containers {

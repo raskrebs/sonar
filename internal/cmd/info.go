@@ -23,6 +23,7 @@ var infoCmd = &cobra.Command{
 		}
 
 		infoHost, _ := cmd.Flags().GetString("host")
+		bindIP, _ := cmd.Flags().GetString("ip")
 
 		var lp *ports.ListeningPort
 		if infoHost != "" {
@@ -30,18 +31,28 @@ var infoCmd = &cobra.Command{
 			if scanErr != nil {
 				return scanErr
 			}
-			for i := range all {
-				if all[i].Port == port {
-					lp = &all[i]
-					break
-				}
-			}
-			if lp == nil {
+			matches := ports.FindAllByPort(port, all)
+			if len(matches) == 0 {
 				return fmt.Errorf("no process found listening on port %d on %s", port, infoHost)
+			}
+			if bindIP != "" {
+				for i := range matches {
+					if matches[i].BindAddress == bindIP {
+						lp = &matches[i]
+						break
+					}
+				}
+				if lp == nil {
+					return fmt.Errorf("no process found listening on %s:%d on %s", bindIP, port, infoHost)
+				}
+			} else if len(matches) == 1 {
+				lp = &matches[0]
+			} else {
+				lp = &matches[0]
 			}
 			lp.Type = ports.ClassifyPort(lp.Port)
 		} else {
-			lp, err = ports.FindByPort(port)
+			lp, err = ports.FindByPort(port, bindIP)
 			if err != nil {
 				return err
 			}
@@ -143,5 +154,6 @@ func printField(label, value string) {
 
 func init() {
 	infoCmd.Flags().String("host", "", "Query a remote host via SSH (e.g. user@hostname)")
+	infoCmd.Flags().String("ip", "", "Specify bind address when a port is bound to multiple IPs")
 	rootCmd.AddCommand(infoCmd)
 }

@@ -29,10 +29,11 @@ var upCmd = &cobra.Command{
 		docker.EnrichPorts(results)
 		ports.Enrich(results)
 
-		// Build a map of port -> ListeningPort for quick lookup
-		portMap := make(map[int]*ports.ListeningPort)
+		// Build a map of port -> ListeningPorts for quick lookup
+		// A port number may have multiple entries (different bind addresses).
+		portMap := make(map[int][]*ports.ListeningPort)
 		for i := range results {
-			portMap[results[i].Port] = &results[i]
+			portMap[results[i].Port] = append(portMap[results[i].Port], &results[i])
 		}
 
 		// Collect ports that need health checks
@@ -40,9 +41,9 @@ var upCmd = &cobra.Command{
 		healthEntryIndices := make(map[int]int) // port -> index in healthTargets
 		for _, entry := range prof.Ports {
 			if entry.Health {
-				if lp, ok := portMap[entry.Port]; ok {
+				if lps, ok := portMap[entry.Port]; ok && len(lps) > 0 {
 					healthEntryIndices[entry.Port] = len(healthTargets)
-					healthTargets = append(healthTargets, *lp)
+					healthTargets = append(healthTargets, *lps[0])
 				}
 			}
 		}
@@ -69,7 +70,7 @@ var upCmd = &cobra.Command{
 			name := entry.Name
 
 			var status, health string
-			if _, ok := portMap[entry.Port]; ok {
+			if lps, ok := portMap[entry.Port]; ok && len(lps) > 0 {
 				status = display.Green("\u2713 up")
 
 				if entry.Health {

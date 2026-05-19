@@ -24,7 +24,9 @@ var logsCmd = &cobra.Command{
 			return fmt.Errorf("invalid port: %s", args[0])
 		}
 
-		lp, err := ports.FindByPort(port)
+		bindIP, _ := cmd.Flags().GetString("ip")
+
+		lp, err := ports.FindByPort(port, bindIP)
 		if err != nil {
 			return err
 		}
@@ -70,6 +72,7 @@ var logsCmd = &cobra.Command{
 
 func init() {
 	logsCmd.Flags().BoolVarP(&logsFollow, "follow", "f", true, "Follow log output (stream continuously)")
+	logsCmd.Flags().String("ip", "", "Specify bind address when a port is bound to multiple IPs")
 	rootCmd.AddCommand(logsCmd)
 }
 

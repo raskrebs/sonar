@@ -125,7 +125,7 @@ Examples:
 // If httpPath is non-empty, an HTTP check is performed against that path.
 func isPortReady(port int, httpPath string) bool {
 	if httpPath != "" {
-		result := ports.ProbeHealth(port, httpPath, 2*time.Second)
+		result := ports.ProbeHealth("localhost", port, httpPath, 2*time.Second)
 		return result.Status == "healthy"
 	}
 

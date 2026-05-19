@@ -36,7 +36,7 @@ func scanLsof() ([]ListeningPort, error) {
 
 // parseLsof parses the output of lsof -iTCP -sTCP:LISTEN -n -P into ListeningPort entries.
 func parseLsof(output string) []ListeningPort {
-	seen := make(map[int]bool)
+	seen := make(map[string]bool)
 	var results []ListeningPort
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
@@ -77,10 +77,11 @@ func parseLsof(output string) []ListeningPort {
 			bindAddr = "0.0.0.0"
 		}
 
-		if seen[port] {
+		key := fmt.Sprintf("%d:%s", port, bindAddr)
+		if seen[key] {
 			continue
 		}
-		seen[port] = true
+		seen[key] = true
 
 		results = append(results, ListeningPort{
 			Port:        port,
@@ -110,7 +111,7 @@ func scanNetstat() ([]ListeningPort, error) {
 //	Proto  Local Address          Foreign Address        State           PID
 //	TCP    0.0.0.0:8000           0.0.0.0:0              LISTENING       12345
 func parseNetstat(output string) []ListeningPort {
-	seen := make(map[int]bool)
+	seen := make(map[string]bool)
 	var results []ListeningPort
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
@@ -146,11 +147,6 @@ func parseNetstat(output string) []ListeningPort {
 			continue
 		}
 
-		if seen[port] {
-			continue
-		}
-		seen[port] = true
-
 		bindAddr := local[:idx]
 		ipVersion := "IPv4"
 		if proto == "TCPV6" || strings.Contains(bindAddr, "[") {
@@ -159,6 +155,12 @@ func parseNetstat(output string) []ListeningPort {
 		if bindAddr == "0.0.0.0" || bindAddr == "[::]" {
 			bindAddr = "0.0.0.0"
 		}
+
+		key := fmt.Sprintf("%d:%s", port, bindAddr)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 
 		results = append(results, ListeningPort{
 			Port:        port,
@@ -182,7 +184,7 @@ func scanSS() ([]ListeningPort, error) {
 
 // parseSS parses the output of ss -tlnp into ListeningPort entries.
 func parseSS(output string) []ListeningPort {
-	seen := make(map[int]bool)
+	seen := make(map[string]bool)
 	var results []ListeningPort
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
@@ -205,15 +207,16 @@ func parseSS(output string) []ListeningPort {
 			continue
 		}
 
-		if seen[port] {
-			continue
-		}
-		seen[port] = true
-
 		bindAddr := local[:idx]
 		if bindAddr == "*" {
 			bindAddr = "0.0.0.0"
 		}
+
+		key := fmt.Sprintf("%d:%s", port, bindAddr)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 
 		ipVersion := "IPv4"
 		if strings.Contains(bindAddr, "[") {
