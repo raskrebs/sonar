@@ -223,6 +223,15 @@ func columnValue(p ports.ListeningPort, col string) string {
 
 func colorProcess(p ports.ListeningPort) string {
 	name := p.DisplayName()
+	// Process unknown (typically hidden by privileges) — fall back to the
+	// well-known service name for the port, dimmed and marked with "~" to
+	// signal it's inferred from the port number, not a detected process.
+	if name == "" {
+		if svc := ports.ServiceName(p.Port); svc != "" {
+			return Dim("~" + svc)
+		}
+		return ""
+	}
 	// If it's Docker and we have the image, show "name (image)"
 	if p.Type == ports.PortTypeDocker && p.DockerImage != "" && p.DockerContainer != "" {
 		display := p.DisplayName()
