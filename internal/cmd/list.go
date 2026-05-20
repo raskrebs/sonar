@@ -109,7 +109,27 @@ func listRun(cmd *cobra.Command, args []string) error {
 		SortBy:  sortFlag,
 		Columns: columns,
 	})
+
+	if hostFlag == "" && hasHiddenProcesses(results) {
+		fmt.Fprintln(os.Stderr, "\nnote: some processes are hidden — re-run with sudo for full visibility")
+	}
 	return nil
+}
+
+// hasHiddenProcesses reports whether the scan ran unprivileged and at least one
+// listening socket came back without a resolvable process name — the signature
+// of the OS withholding process info for sockets owned by other users.
+func hasHiddenProcesses(pp []ports.ListeningPort) bool {
+	// Geteuid returns -1 on Windows; the >0 check naturally excludes it and root.
+	if os.Geteuid() <= 0 {
+		return false
+	}
+	for _, p := range pp {
+		if p.DisplayName() == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func parseColumns(s string) []string {
