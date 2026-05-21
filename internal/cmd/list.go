@@ -167,18 +167,16 @@ func effectiveColumns(allCols bool, columnsFlag string, stats bool, cfgCols []st
 	case columnsFlag != "":
 		return parseColumns(columnsFlag)
 	}
-	base := display.DefaultColumns
-	if len(cfgCols) > 0 {
-		base = cfgCols
-	}
 	if stats {
+		base := display.DefaultColumns
+		if len(cfgCols) > 0 {
+			base = cfgCols
+		}
 		out := append([]string{}, base...)
 		return append(out, "cpu", "mem", "state", "uptime", "connections")
 	}
-	if len(cfgCols) > 0 {
-		return cfgCols
-	}
-	return nil
+	// nil when no config columns → RenderTable falls back to its defaults.
+	return cfgCols
 }
 
 func excludeApps(pp []ports.ListeningPort) []ports.ListeningPort {
