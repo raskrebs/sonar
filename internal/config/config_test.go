@@ -83,3 +83,77 @@ func TestLoadEmptyFile(t *testing.T) {
 		t.Errorf("empty file should yield empty config")
 	}
 }
+
+func writeConfig(t *testing.T, content string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "sonar")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateUnknownColumn(t *testing.T) {
+	writeConfig(t, "list:\n  columns: [port, bogus, url]\n")
+	cfg, warnings := Load()
+	if len(warnings) == 0 {
+		t.Fatal("expected a warning for unknown column")
+	}
+	if len(cfg.List.Columns) != 0 {
+		t.Errorf("columns should be cleared on bad value, got %v", cfg.List.Columns)
+	}
+}
+
+func TestValidateBadSortKeepsOtherSettings(t *testing.T) {
+	writeConfig(t, "list:\n  sort: sideways\n  filter: docker\n")
+	cfg, warnings := Load()
+	if len(warnings) == 0 {
+		t.Fatal("expected a warning for bad sort")
+	}
+	if cfg.List.Sort != "" {
+		t.Errorf("bad sort should be cleared, got %q", cfg.List.Sort)
+	}
+	if cfg.List.Filter != "docker" {
+		t.Errorf("valid filter should survive, got %q", cfg.List.Filter)
+	}
+}
+
+func TestValidateBadFilter(t *testing.T) {
+	writeConfig(t, "list:\n  filter: nonsense\n")
+	cfg, warnings := Load()
+	if len(warnings) == 0 || cfg.List.Filter != "" {
+		t.Errorf("bad filter should warn and clear; warnings=%v filter=%q", warnings, cfg.List.Filter)
+	}
+}
+
+func TestValidateEmptyColumnsTreatedAsUnset(t *testing.T) {
+	writeConfig(t, "list:\n  columns: []\n")
+	cfg, warnings := Load()
+	if len(warnings) != 0 {
+		t.Errorf("empty columns should not warn: %v", warnings)
+	}
+	if len(cfg.List.Columns) != 0 {
+		t.Errorf("empty columns stays empty (falls back to defaults)")
+	}
+}
+
+func TestValidateServicePortRange(t *testing.T) {
+	writeConfig(t, "services:\n  0: bad\n  70000: bad\n  8000: good\n")
+	cfg, warnings := Load()
+	if len(warnings) == 0 {
+		t.Fatal("expected warnings for out-of-range ports")
+	}
+	if _, ok := cfg.Services[0]; ok {
+		t.Error("port 0 should be removed")
+	}
+	if _, ok := cfg.Services[70000]; ok {
+		t.Error("port 70000 should be removed")
+	}
+	if cfg.Services[8000] != "good" {
+		t.Error("valid service should survive")
+	}
+}

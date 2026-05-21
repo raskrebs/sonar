@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/raskrebs/sonar/internal/display"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,7 +53,43 @@ func Load() (*Config, []string) {
 	return cfg, validate(cfg)
 }
 
-// validate is implemented in a later task.
+var validSorts = map[string]bool{"port": true, "pid": true, "name": true, "type": true}
+var validFilters = map[string]bool{"docker": true, "user": true, "system": true}
+
+// validate checks list settings and service ports, dropping any invalid value
+// and returning a warning for each. Valid neighboring settings are preserved.
 func validate(cfg *Config) []string {
-	return nil
+	var warnings []string
+
+	// Columns: every entry must be a known display column.
+	known := make(map[string]bool, len(display.AllColumns))
+	for _, c := range display.AllColumns {
+		known[c] = true
+	}
+	for _, c := range cfg.List.Columns {
+		if !known[c] {
+			warnings = append(warnings, fmt.Sprintf("config: unknown column %q — using default columns", c))
+			cfg.List.Columns = nil
+			break
+		}
+	}
+
+	if cfg.List.Sort != "" && !validSorts[cfg.List.Sort] {
+		warnings = append(warnings, fmt.Sprintf("config: invalid sort %q — using default", cfg.List.Sort))
+		cfg.List.Sort = ""
+	}
+
+	if cfg.List.Filter != "" && !validFilters[cfg.List.Filter] {
+		warnings = append(warnings, fmt.Sprintf("config: invalid filter %q — ignoring", cfg.List.Filter))
+		cfg.List.Filter = ""
+	}
+
+	for port := range cfg.Services {
+		if port < 1 || port > 65535 {
+			warnings = append(warnings, fmt.Sprintf("config: invalid service port %d — ignoring", port))
+			delete(cfg.Services, port)
+		}
+	}
+
+	return warnings
 }
