@@ -77,13 +77,16 @@ func listRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Hide desktop apps unless --all is set
-	if !allFlag {
+	// Resolve row-affecting settings (config fills in where no flag was passed).
+	cfg := loadedConfig
+	showApps := effectiveBool(cmd.Flags().Changed("all"), allFlag, cfg.List.All)
+	activeFilter := effectiveString(cmd.Flags().Changed("filter"), filterFlag, cfg.List.Filter)
+
+	if !showApps {
 		results = excludeApps(results)
 	}
-
-	if filterFlag != "" {
-		results = display.FilterPorts(results, filterFlag)
+	if activeFilter != "" {
+		results = display.FilterPorts(results, activeFilter)
 	}
 
 	if ipv4Flag {
@@ -96,17 +99,11 @@ func listRun(cmd *cobra.Command, args []string) error {
 		return display.RenderJSON(os.Stdout, results)
 	}
 
-	var columns []string
-	if allColumnsFlag {
-		columns = display.AllColumns
-	} else if columnsFlag != "" {
-		columns = parseColumns(columnsFlag)
-	} else if statsFlag {
-		columns = append(display.DefaultColumns, "cpu", "mem", "state", "uptime", "connections")
-	}
+	sortBy := effectiveString(cmd.Flags().Changed("sort"), sortFlag, cfg.List.Sort)
+	columns := effectiveColumns(allColumnsFlag, columnsFlag, statsFlag, cfg.List.Columns)
 
 	display.RenderTable(os.Stdout, results, display.TableOptions{
-		SortBy:  sortFlag,
+		SortBy:  sortBy,
 		Columns: columns,
 	})
 
@@ -142,6 +139,44 @@ func parseColumns(s string) []string {
 		}
 	}
 	return cols
+}
+
+// effectiveString applies precedence: explicit flag > config value > flag default.
+func effectiveString(flagChanged bool, flagVal, cfgVal string) string {
+	if !flagChanged && cfgVal != "" {
+		return cfgVal
+	}
+	return flagVal
+}
+
+// effectiveBool applies precedence: explicit flag > config value > flag default.
+func effectiveBool(flagChanged bool, flagVal bool, cfgVal *bool) bool {
+	if !flagChanged && cfgVal != nil {
+		return *cfgVal
+	}
+	return flagVal
+}
+
+// effectiveColumns resolves the column list. Returns nil when no flag, config,
+// or stats override applies, so RenderTable falls back to its built-in defaults
+// (preserving current behavior when no config is present).
+func effectiveColumns(allCols bool, columnsFlag string, stats bool, cfgCols []string) []string {
+	switch {
+	case allCols:
+		return display.AllColumns
+	case columnsFlag != "":
+		return parseColumns(columnsFlag)
+	}
+	if stats {
+		base := display.DefaultColumns
+		if len(cfgCols) > 0 {
+			base = cfgCols
+		}
+		out := append([]string{}, base...)
+		return append(out, "cpu", "mem", "state", "uptime", "connections")
+	}
+	// nil when no config columns → RenderTable falls back to its defaults.
+	return cfgCols
 }
 
 func excludeApps(pp []ports.ListeningPort) []ports.ListeningPort {

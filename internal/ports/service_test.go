@@ -20,3 +20,28 @@ func TestServiceName(t *testing.T) {
 		}
 	}
 }
+
+func TestRegisterServices(t *testing.T) {
+	// Save and restore so we don't pollute other tests.
+	orig := make(map[int]string, len(wellKnownServices))
+	for k, v := range wellKnownServices {
+		orig[k] = v
+	}
+	t.Cleanup(func() { wellKnownServices = orig })
+
+	RegisterServices(map[int]string{
+		9000: "php-fpm", // new port
+		53:   "my-dns",  // override built-in
+		1234: "",        // empty name — must be skipped
+	})
+
+	if got := ServiceName(9000); got != "php-fpm" {
+		t.Errorf("ServiceName(9000) = %q, want php-fpm", got)
+	}
+	if got := ServiceName(53); got != "my-dns" {
+		t.Errorf("ServiceName(53) = %q, want my-dns (override)", got)
+	}
+	if got := ServiceName(1234); got != "" {
+		t.Errorf("ServiceName(1234) = %q, want empty (skipped)", got)
+	}
+}
