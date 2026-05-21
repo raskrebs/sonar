@@ -144,6 +144,46 @@ func parseColumns(s string) []string {
 	return cols
 }
 
+// effectiveString applies precedence: explicit flag > config value > flag default.
+func effectiveString(flagChanged bool, flagVal, cfgVal string) string {
+	if !flagChanged && cfgVal != "" {
+		return cfgVal
+	}
+	return flagVal
+}
+
+// effectiveBool applies precedence: explicit flag > config value > flag default.
+func effectiveBool(flagChanged bool, flagVal bool, cfgVal *bool) bool {
+	if !flagChanged && cfgVal != nil {
+		return *cfgVal
+	}
+	return flagVal
+}
+
+// effectiveColumns resolves the column list. Returns nil when no flag, config,
+// or stats override applies, so RenderTable falls back to its built-in defaults
+// (preserving current behavior when no config is present).
+func effectiveColumns(allCols bool, columnsFlag string, stats bool, cfgCols []string) []string {
+	switch {
+	case allCols:
+		return display.AllColumns
+	case columnsFlag != "":
+		return parseColumns(columnsFlag)
+	}
+	base := display.DefaultColumns
+	if len(cfgCols) > 0 {
+		base = cfgCols
+	}
+	if stats {
+		out := append([]string{}, base...)
+		return append(out, "cpu", "mem", "state", "uptime", "connections")
+	}
+	if len(cfgCols) > 0 {
+		return cfgCols
+	}
+	return nil
+}
+
 func excludeApps(pp []ports.ListeningPort) []ports.ListeningPort {
 	var result []ports.ListeningPort
 	for _, p := range pp {
