@@ -53,6 +53,45 @@ func Load() (*Config, []string) {
 	return cfg, validate(cfg)
 }
 
+const template = `# sonar configuration
+# All settings are optional. Uncomment and edit to override built-in defaults.
+# Explicit command-line flags always take precedence over this file.
+
+# list:
+#   # Columns shown by default. Available: port, process, pid, type, url,
+#   # cpu, mem, threads, uptime, state, connections, container, image,
+#   # containerport, compose, project, user, bind, ip, health, latency
+#   columns: [port, process, container, image, containerport, url]
+#   sort: port      # port | pid | name | type
+#   filter: ""      # docker | user | system | "" (all)
+#   all: false      # include desktop apps by default
+
+# color: true       # set false to disable colored output
+
+# services:         # label custom/unknown ports (port: name)
+#   9000: php-fpm
+#   5050: my-dashboard
+`
+
+// WriteTemplate writes a commented starter config to Path(), creating the
+// parent directory if needed. It refuses to overwrite an existing file unless
+// force is true.
+func WriteTemplate(force bool) error {
+	path := Path()
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("config already exists at %s (use --force to overwrite)", path)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("could not create config directory: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(template), 0o644); err != nil {
+		return fmt.Errorf("could not write config: %w", err)
+	}
+	return nil
+}
+
 var validSorts = map[string]bool{"port": true, "pid": true, "name": true, "type": true}
 var validFilters = map[string]bool{"docker": true, "user": true, "system": true}
 

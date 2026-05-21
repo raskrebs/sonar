@@ -157,3 +157,39 @@ func TestValidateServicePortRange(t *testing.T) {
 		t.Error("valid service should survive")
 	}
 }
+
+func TestWriteTemplateCreatesFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := WriteTemplate(false); err != nil {
+		t.Fatalf("WriteTemplate: %v", err)
+	}
+	data, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatalf("config file not written: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("template is empty")
+	}
+	cfg, warnings := Load()
+	if len(warnings) != 0 {
+		t.Errorf("template produced warnings: %v", warnings)
+	}
+	if len(cfg.List.Columns) != 0 {
+		t.Errorf("template should be all-commented, got columns %v", cfg.List.Columns)
+	}
+}
+
+func TestWriteTemplateRefusesOverwrite(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := WriteTemplate(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteTemplate(false); err == nil {
+		t.Error("expected error when file exists and force=false")
+	}
+	if err := WriteTemplate(true); err != nil {
+		t.Errorf("force=true should overwrite, got %v", err)
+	}
+}
