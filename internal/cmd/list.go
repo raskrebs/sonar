@@ -77,13 +77,16 @@ func listRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Hide desktop apps unless --all is set
-	if !allFlag {
+	// Resolve row-affecting settings (config fills in where no flag was passed).
+	cfg := loadedConfig
+	showApps := effectiveBool(cmd.Flags().Changed("all"), allFlag, cfg.List.All)
+	activeFilter := effectiveString(cmd.Flags().Changed("filter"), filterFlag, cfg.List.Filter)
+
+	if !showApps {
 		results = excludeApps(results)
 	}
-
-	if filterFlag != "" {
-		results = display.FilterPorts(results, filterFlag)
+	if activeFilter != "" {
+		results = display.FilterPorts(results, activeFilter)
 	}
 
 	if ipv4Flag {
@@ -96,17 +99,11 @@ func listRun(cmd *cobra.Command, args []string) error {
 		return display.RenderJSON(os.Stdout, results)
 	}
 
-	var columns []string
-	if allColumnsFlag {
-		columns = display.AllColumns
-	} else if columnsFlag != "" {
-		columns = parseColumns(columnsFlag)
-	} else if statsFlag {
-		columns = append(display.DefaultColumns, "cpu", "mem", "state", "uptime", "connections")
-	}
+	sortBy := effectiveString(cmd.Flags().Changed("sort"), sortFlag, cfg.List.Sort)
+	columns := effectiveColumns(allColumnsFlag, columnsFlag, statsFlag, cfg.List.Columns)
 
 	display.RenderTable(os.Stdout, results, display.TableOptions{
-		SortBy:  sortFlag,
+		SortBy:  sortBy,
 		Columns: columns,
 	})
 
