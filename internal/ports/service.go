@@ -61,3 +61,15 @@ var wellKnownServices = map[int]string{
 func ServiceName(port int) string {
 	return wellKnownServices[port]
 }
+
+// RegisterServices merges user-supplied port->label mappings into the
+// well-known service table, overriding built-in entries on conflict. Empty
+// labels are ignored.
+func RegisterServices(m map[int]string) {
+	for port, name := range m {
+		if name == "" {
+			continue
+		}
+		wellKnownServices[port] = name
+	}
+}
