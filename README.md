@@ -219,6 +219,36 @@ sonar --no-color                           # disable colors (also respects NO_CO
 
 The `--stats` flag fetches per-process and per-container resource usage. For Docker containers, it uses the Docker Engine API for accurate per-container metrics. Without `--stats`, sonar returns instantly.
 
+## Configuration
+
+`sonar` reads optional defaults from `~/.config/sonar/config.yaml`. The file is
+optional — without it, built-in defaults apply. Command-line flags always
+override the config file.
+
+Create a starter file:
+
+```bash
+sonar config init       # write a commented template
+sonar config path       # print the file location
+sonar config edit       # open it in $EDITOR
+```
+
+Example config:
+
+```yaml
+list:
+  columns: [port, process, container, image, containerport, url]
+  sort: port            # port | pid | name | type
+  filter: ""            # docker | user | system | "" (all)
+  all: false            # include desktop apps by default
+color: true             # set false to disable colored output
+services:               # label custom/unknown ports
+  9000: php-fpm
+  5050: my-dashboard
+```
+
+Invalid values are ignored with a warning; sonar continues with defaults.
+
 ## Tray app
 
 The menu bar tray app (macOS only) is a native Swift binary that shows live port stats in your menu bar. If you installed sonar via the install script or a GitHub release, the tray binary (`sonar-tray`) is included automatically.
