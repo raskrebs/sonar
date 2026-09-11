@@ -60,6 +60,9 @@ func publishedPorts(containers []container) map[int]bool {
 // enrichFrom marks every port a container publishes as Docker's and copies the
 // container's name, image and compose labels onto it. It only reads
 // containers, so a Watcher can hand it the cached list without copying.
+//
+// A port the list claims but some other process holds is left alone: see
+// heldByForwarder.
 func enrichFrom(pp []ports.ListeningPort, containers []container) {
 	if len(containers) == 0 {
 		return
@@ -80,6 +83,15 @@ func enrichFrom(pp []ports.ListeningPort, containers []container) {
 	for i := range pp {
 		c, ok := hostPortMap[pp[i].Port]
 		if !ok {
+			continue
+		}
+		if !heldByForwarder(&pp[i]) {
+			// The list says a container publishes this port, but a native
+			// process holds it. The list can be stale — the watcher keeps
+			// serving its last good one while Docker is not answering — and
+			// stamping the row would make `ports.kill` run `docker stop`
+			// against the wrong thing instead of signalling the real owner
+			// (issue #95).
 			continue
 		}
 		pp[i].Type = ports.PortTypeDocker
