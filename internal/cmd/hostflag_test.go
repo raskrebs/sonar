@@ -88,8 +88,18 @@ func startDaemonForHostTests(t *testing.T, router daemon.Router, remote func() s
 	if err := client.WaitForSocket(ctx, socket, 5*time.Second); err != nil {
 		t.Fatalf("daemon did not come up: %v", err)
 	}
+	// WaitForSocket only proves the socket is listening, and the kernel
+	// completes that dial before the daemon has run its OnStart hooks. A
+	// daemon.hello is answered only once the accept loop is running, which is
+	// after every hook, so one handshake here means internal/remote's hook has
+	// already installed its manager and cannot overwrite the stand-ins below.
+	hello, err := client.Dial(ctx, client.ClientInfo{Name: "cli", Version: "test", Socket: socket})
+	if err != nil {
+		t.Fatalf("daemon did not answer hello: %v", err)
+	}
+	_ = hello.Close()
 
-	// After the daemon is up, not before: internal/remote's OnStart hook
+	// After the hooks have run, not before: internal/remote's OnStart hook
 	// installs the real manager as both the remote rows and the router, and
 	// this test's stand-ins have to be what is in place when the CLI calls.
 	if remote != nil {
