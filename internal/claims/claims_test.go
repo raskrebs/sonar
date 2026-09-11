@@ -3,6 +3,7 @@ package claims_test
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -94,6 +95,53 @@ func TestProbeSkipsPortsAnotherKeyHolds(t *testing.T) {
 	}
 	if len(res.Ports) != 2 {
 		t.Fatalf("ports = %v, want two", res.Ports)
+	}
+}
+
+// TestAnOmittedCountTakesTheProjectDefault: a request with no count asks
+// DefaultCount for its project (recovered from the key when only a key was
+// sent); an explicit count never asks; a project with no default gets one.
+func TestAnOmittedCountTakesTheProjectDefault(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "sonar.db"))
+	if err != nil {
+		t.Fatalf("opening the store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	var asked []string
+	m := claims.New(st.Claims(), claims.Options{DefaultCount: func(project string) int {
+		asked = append(asked, project)
+		if project == "shop" {
+			return 4
+		}
+		return 0
+	}})
+
+	if res := acquire(t, m, claims.Request{Project: "shop", Worktree: "feature-x"}); len(res.Ports) != 4 {
+		t.Errorf("omitted count: ports = %v, want the project's block of 4", res.Ports)
+	}
+	if res := acquire(t, m, claims.Request{Key: "shop/feature-y"}); len(res.Ports) != 4 {
+		t.Errorf("key only: ports = %v, want 4 from the project in the key", res.Ports)
+	}
+	if res := acquire(t, m, claims.Request{Project: "shop", Worktree: "feature-z", Count: 2}); len(res.Ports) != 2 {
+		t.Errorf("explicit count: ports = %v, want the 2 asked for", res.Ports)
+	}
+	if res := acquire(t, m, claims.Request{Project: "other"}); len(res.Ports) != 1 {
+		t.Errorf("no default: ports = %v, want one", res.Ports)
+	}
+	if got := strings.Join(asked, ","); got != "shop,shop,other" {
+		t.Errorf("DefaultCount was asked for %q, want shop,shop,other (never for an explicit count)", got)
+	}
+}
+
+// TestTheCountCapFitsTheLargestWorktreeBlock: `.sonar.yaml` allows
+// worktree_ports up to 100, so the manager must grant 100 and refuse 101.
+func TestTheCountCapFitsTheLargestWorktreeBlock(t *testing.T) {
+	m, _ := newManager(t, nil, nil)
+	if res := acquire(t, m, claims.Request{Key: "big/main", Count: 100}); len(res.Ports) != 100 {
+		t.Fatalf("ports = %d, want 100", len(res.Ports))
+	}
+	if _, err := m.Acquire(claims.Request{Key: "bigger/main", Count: claims.MaxCount + 1}); err == nil {
+		t.Fatal("a count above MaxCount should be refused")
 	}
 }
 

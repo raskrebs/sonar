@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/raskrebs/sonar/internal/groups"
 	"github.com/raskrebs/sonar/internal/state"
 	"github.com/raskrebs/sonar/internal/store"
 )
@@ -16,8 +17,9 @@ import (
 const DefaultTTL = 24 * time.Hour
 
 // MaxCount caps how many ports one key may hold, so a typo in `count` cannot
-// reserve a whole range.
-const MaxCount = 64
+// reserve a whole range. It is the same cap `.sonar.yaml` puts on
+// worktree_ports, so a block a config asks for is always one Acquire grants.
+const MaxCount = groups.MaxWorktreePorts
 
 // acquireAttempts is how often Acquire re-derives its ports when the table
 // changed underneath it. Inside one daemon the mutex makes a second attempt
@@ -56,22 +58,30 @@ type Options struct {
 	Listening func() (map[int]bool, error)
 	// DefaultTTL overrides DefaultTTL for callers that pass no ttl.
 	DefaultTTL time.Duration
+	// DefaultCount is how many ports a request that names no count takes for
+	// a project: the daemon answers it from the project's `.sonar.yaml`
+	// worktree_ports. A result of zero, or a nil func, means one port.
+	DefaultCount func(project string) int
 }
 
 // Manager is the claims book. One lives in the daemon, per database.
 type Manager struct {
-	table Table
-	rng   Range
-	now   func() time.Time
-	ttl   time.Duration
-	live  func() (map[int]bool, error)
+	table        Table
+	rng          Range
+	now          func() time.Time
+	ttl          time.Duration
+	live         func() (map[int]bool, error)
+	defaultCount func(project string) int
 
 	mu sync.Mutex
 }
 
 // New builds a manager over a claims table.
 func New(t Table, o Options) *Manager {
-	m := &Manager{table: t, rng: o.Range, now: o.Now, ttl: o.DefaultTTL, live: o.Listening}
+	m := &Manager{
+		table: t, rng: o.Range, now: o.Now, ttl: o.DefaultTTL, live: o.Listening,
+		defaultCount: o.DefaultCount,
+	}
 	if m.rng.Valid() != nil {
 		m.rng = DefaultRange
 	}
@@ -119,7 +129,11 @@ func (m *Manager) Acquire(req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// An explicit count always wins; only an omitted one asks the project.
 	count := req.Count
+	if count == 0 && m.defaultCount != nil {
+		count = m.defaultCount(project)
+	}
 	if count == 0 {
 		count = 1
 	}

@@ -90,7 +90,7 @@ type NextFreePortOutput = rpc.PortsNextResult
 type ClaimPortInput struct {
 	Project    string `json:"project,omitempty" jsonschema:"The project the ports belong to. Defaults to the git checkout containing this server's working directory."`
 	Worktree   string `json:"worktree,omitempty" jsonschema:"The worktree the ports belong to. Defaults to this checkout's worktree, or main for a primary checkout."`
-	Count      int    `json:"count,omitempty" jsonschema:"How many ports to reserve. Defaults to 1."`
+	Count      int    `json:"count,omitempty" jsonschema:"How many ports to reserve. Defaults to the project's worktree_ports from .sonar.yaml, or 1 when it sets none."`
 	TTLSeconds int64  `json:"ttl_seconds,omitempty" jsonschema:"How long the reservation lives, in seconds. Defaults to 86400 (one day). Claiming again refreshes it."`
 	Release    bool   `json:"release,omitempty" jsonschema:"Give this key's ports back instead of claiming. Do this when the work is finished."`
 }

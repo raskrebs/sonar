@@ -9,6 +9,7 @@ import (
 
 	"github.com/raskrebs/sonar/internal/claims"
 	"github.com/raskrebs/sonar/internal/daemon/rpc"
+	"github.com/raskrebs/sonar/internal/groups"
 	"github.com/raskrebs/sonar/internal/scanner"
 	"github.com/raskrebs/sonar/internal/state"
 	"github.com/raskrebs/sonar/internal/store"
@@ -40,8 +41,61 @@ func claimsManager(rt *Runtime) (*claims.Manager, error) {
 		return nil, errNoStore()
 	}
 	return claims.New(st.Claims(), claims.Options{
-		Listening: func() (map[int]bool, error) { return listeningPorts(rt) },
+		Listening:    func() (map[int]bool, error) { return listeningPorts(rt) },
+		DefaultCount: func(project string) int { return worktreePorts(rt, project) },
 	}), nil
+}
+
+// worktreePorts answers claims.Options.DefaultCount: the worktree_ports of the
+// `.sonar.yaml` belonging to a claim's project, or zero when no config says
+// (step 5A.7).
+//
+// A claim names its project the way claims.Identity does — the main
+// checkout's directory name, which every linked worktree of it shares — so a
+// config belongs to the project when claims.Identity of the config's own
+// directory gives the same name. A config whose group name is the project
+// matches too, for a caller that passed the group name as project.
+//
+// Several configs can match: the main checkout's file and each worktree's
+// checked-out copy of it, or a monorepo's nested files. The main checkout's
+// repository-root file wins, because that is the file the desktop's group page
+// edits; see configRank.
+func worktreePorts(rt *Runtime, project string) int {
+	if rt.Scanner == nil || project == "" {
+		return 0
+	}
+	best, bestRank := 0, -1
+	for _, cfg := range rt.Scanner.Configs() {
+		if cfg.WorktreePorts == nil {
+			continue
+		}
+		if r := configRank(cfg, project); r > bestRank {
+			best, bestRank = *cfg.WorktreePorts, r
+		}
+	}
+	return best
+}
+
+// configRank orders the configs that could answer for a project: -1 is no
+// match, 0 a match by group name only, and 1-4 a match by checkout, higher for
+// the main checkout over a linked worktree and for the repository root over a
+// nested directory.
+func configRank(cfg *groups.Config, project string) int {
+	if name, _ := claims.Identity(cfg.Dir, "", ""); name != project {
+		if cfg.Name == project {
+			return 0
+		}
+		return -1
+	}
+	root, linked, inRepo := groups.Find(cfg.Dir)
+	rank := 1
+	if !inRepo || linked == "" {
+		rank += 2
+	}
+	if !inRepo || cfg.Dir == root {
+		rank++
+	}
+	return rank
 }
 
 // listeningPorts is the live scan as a set, which is how the claim probe skips
