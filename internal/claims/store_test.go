@@ -37,8 +37,9 @@ func TestMigrationTakesTheStoreToVersionSix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Version: %v", err)
 	}
-	if v != store.VersionClaims {
-		t.Fatalf("version = %d, want %d", v, store.VersionClaims)
+	// Later migrations (007, group aliases) may sit above claims' 006.
+	if v != store.LatestVersion() {
+		t.Fatalf("version = %d, want the latest registered %d", v, store.LatestVersion())
 	}
 
 	var applied []int
@@ -54,8 +55,12 @@ func TestMigrationTakesTheStoreToVersionSix(t *testing.T) {
 		}
 		applied = append(applied, n)
 	}
-	if len(applied) < 3 || applied[len(applied)-1] != store.VersionClaims {
-		t.Fatalf("applied versions = %v, want them to end at %d", applied, store.VersionClaims)
+	hasClaims := false
+	for _, n := range applied {
+		hasClaims = hasClaims || n == store.VersionClaims
+	}
+	if len(applied) < 3 || !hasClaims {
+		t.Fatalf("applied versions = %v, want them to include %d", applied, store.VersionClaims)
 	}
 
 	var name string

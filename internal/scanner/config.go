@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"github.com/raskrebs/sonar/internal/groups"
+	"github.com/raskrebs/sonar/internal/state"
 )
 
 // The daemon's `.sonar.yaml` index lives here, on the scan loop, because the
@@ -43,6 +44,14 @@ func (l *Loop) GroupOf(cfg *groups.Config) string {
 	l.attr.mu.Lock()
 	defer l.attr.mu.Unlock()
 	return l.index().GroupOf(cfg)
+}
+
+// PlanGroupRename works out what `groups.rename` changes, against the groups
+// the caller read and the index they were built from.
+func (l *Loop) PlanGroupRename(gg []state.Group, from, to string) (*groups.RenamePlan, error) {
+	l.attr.mu.Lock()
+	defer l.attr.mu.Unlock()
+	return groups.PlanRename(gg, l.index(), from, to)
 }
 
 // ConfigAt returns the config read from this file.

@@ -103,6 +103,32 @@ func (r *Registry) Unregister(pid int) bool {
 	return ok
 }
 
+// RenameGroups moves every run recorded under an old group name to its new one
+// (`groups.rename`), so a service started before its project was renamed stays
+// in the project's group instead of keeping a group of the old name to itself.
+// It reports how many runs moved.
+func (r *Registry) RenameGroups(renames map[string]string) int {
+	if len(renames) == 0 {
+		return 0
+	}
+	r.mu.Lock()
+	var moved []Record
+	for pid, rec := range r.runs {
+		next, ok := renames[rec.Group]
+		if !ok || next == "" {
+			continue
+		}
+		rec.Group = next
+		r.runs[pid] = rec
+		moved = append(moved, rec)
+	}
+	r.mu.Unlock()
+	for _, rec := range moved {
+		r.mirrorAdd(rec)
+	}
+	return len(moved)
+}
+
 // List returns the live runs, oldest first, after pruning dead ones.
 func (r *Registry) List() []Record {
 	r.Prune()

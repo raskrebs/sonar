@@ -36,14 +36,27 @@ func row(id string, seen time.Time) store.SessionRow {
 	}
 }
 
+// applied reports whether the database recorded one migration version. Later
+// migrations (007, group aliases) sit above 005, so the highest version alone
+// no longer says whether 005 ran.
+func applied(t *testing.T, s *store.Store, version int) bool {
+	t.Helper()
+	var n int
+	if err := s.DB().QueryRow(`SELECT count(*) FROM schema_version WHERE version = ?`, version).Scan(&n); err != nil {
+		t.Fatalf("reading schema_version: %v", err)
+	}
+	return n == 1
+}
+
 func TestMigration005IsTheReservedVersion(t *testing.T) {
 	s := openStore(t)
 	v, err := s.Version()
 	if err != nil {
 		t.Fatalf("Version: %v", err)
 	}
-	if v != store.VersionSessions {
-		t.Errorf("version = %d, want the reserved sessions version %d", v, store.VersionSessions)
+	if v != store.LatestVersion() || !applied(t, s, store.VersionSessions) {
+		t.Errorf("version = %d, want %d with the reserved sessions version %d applied",
+			v, store.LatestVersion(), store.VersionSessions)
 	}
 	var n int
 	if err := s.DB().QueryRow(
@@ -85,8 +98,9 @@ func TestMigrateFromV2(t *testing.T) {
 	if s.ResetHappened() {
 		t.Fatal("a valid v2 database was treated as corrupt")
 	}
-	if v, err := s.Version(); err != nil || v != store.VersionSessions {
-		t.Fatalf("version after upgrade = %d (%v), want %d", v, err, store.VersionSessions)
+	if v, err := s.Version(); err != nil || v != store.LatestVersion() || !applied(t, s, store.VersionSessions) {
+		t.Fatalf("version after upgrade = %d (%v), want %d with %d applied",
+			v, err, store.LatestVersion(), store.VersionSessions)
 	}
 	if name, ok, err := s.GetRename("cwd:/home/me/code/shop:3000"); err != nil || !ok || name != "storefront" {
 		t.Errorf("the v2 rename did not survive: %q, %v, %v", name, ok, err)

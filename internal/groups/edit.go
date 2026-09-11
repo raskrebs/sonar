@@ -161,6 +161,30 @@ func (e *ServiceConflictError) Error() string {
 // The returned Config is the file as it would then stand: it is parsed from the
 // rendered bytes, so what a later Load sees is what has been validated here.
 func RenderEdit(path string, edit ConfigEdit) ([]byte, *Config, error) {
+	return render(path, func(abs string, root *yaml.Node) error { return applyEdit(abs, root, edit) })
+}
+
+// SetConfigName writes a new top-level `name:` into a `.sonar.yaml` and returns
+// the file as it then stands. It goes down the same node-level path as every
+// other edit, so comments and formatting survive, and nothing is written
+// unless the result validates. `groups.rename` renames a file project with it.
+func SetConfigName(path, name string) (*Config, error) {
+	out, cfg, err := render(path, func(_ string, root *yaml.Node) error {
+		setKeyIn(root, "name", strNode(name), rootKeyOrder)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := WriteConfigFile(cfg.Path, out); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// render reads the file at path, lets apply change its node tree, and returns
+// the bytes that would be written together with the config they parse to.
+func render(path string, apply func(abs string, root *yaml.Node) error) ([]byte, *Config, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, nil, err
@@ -179,7 +203,7 @@ func RenderEdit(path string, edit ConfigEdit) ([]byte, *Config, error) {
 		return nil, nil, &ConfigError{Path: abs, Problems: []string{"the file is not a YAML mapping"}}
 	}
 
-	if err := applyEdit(abs, root, edit); err != nil {
+	if err := apply(abs, root); err != nil {
 		return nil, nil, err
 	}
 

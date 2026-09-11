@@ -405,6 +405,33 @@ type GroupsAssignResult struct {
 	Group *string `json:"group" jsonschema:"nullable"`
 }
 
+// GroupsRenameParams renames a project (step 5A.6). Name is the project's name
+// or the name of any of its checkout groups: the rename always applies to the
+// project, so the main checkout's group becomes To and every linked worktree's
+// group becomes `<To>@<worktree>`. A project whose main checkout has a
+// `.sonar.yaml` is renamed by writing `name:` into that file; one without keeps
+// the new name in the daemon.
+//
+// Errors: invalid_params for an empty name or a To that is empty or holds `@`,
+// `/` or whitespace, and for a group whose name is not a project's to change —
+// a manual group (pins name it), a group a `sonar start --group` named, or a
+// Compose project; not_found for an unknown group; conflict when a group
+// outside the project already has a name the rename would give; invalid_config
+// when the edited file would no longer validate.
+type GroupsRenameParams struct {
+	HostParams
+	Name string `json:"name"`
+	To   string `json:"to"`
+}
+
+// GroupsRenameResult carries in Affected the new name of every group the rename
+// changed — the project's and each checkout's — sorted, and in Name the
+// project's new name. Affected is empty when the project already had that name.
+type GroupsRenameResult struct {
+	MutationResult
+	Name string `json:"name"`
+}
+
 // GroupConfig is a `.sonar.yaml` as the protocol carries it: the group name,
 // the services as contract rows, and the extra ports the file claims. It is
 // the `config` of groups.config.get and groups.config.set (contract §13.2).

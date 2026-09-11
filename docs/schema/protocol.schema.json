@@ -1504,6 +1504,46 @@
         "errors"
       ]
     },
+    "GroupsRenameParams": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "name",
+        "to"
+      ]
+    },
+    "GroupsRenameResult": {
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "affected": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "ok",
+        "affected",
+        "name"
+      ]
+    },
     "GroupsStartChunk": {
       "properties": {
         "service": {
@@ -4209,6 +4249,14 @@
       },
       "result": {
         "$ref": "#/definitions/GroupsReloadResult"
+      }
+    },
+    "groups.rename": {
+      "params": {
+        "$ref": "#/definitions/GroupsRenameParams"
+      },
+      "result": {
+        "$ref": "#/definitions/GroupsRenameResult"
       }
     },
     "groups.start": {

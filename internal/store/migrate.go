@@ -42,6 +42,8 @@ const (
 	VersionProxies  = 4 // reserved: spec 3
 	VersionClaims   = 6 // reserved: spec 2
 	VersionSessions = 5 // reserved: spec 2
+
+	VersionGroupAliases = 7 // group_aliases: project names from groups.rename
 )
 
 // ReservedVersions maps the version numbers held for other packages to the

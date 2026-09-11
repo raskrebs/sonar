@@ -20,6 +20,7 @@ type Store interface {
 	Roots() ([]string, error)
 	AddRoot(path string) error
 	AppendBatch(events []store.HistoryEvent) error
+	GroupAliases() (map[string]string, error)
 }
 
 // attribution is the per-loop group state: the index of known `.sonar.yaml`
@@ -112,6 +113,7 @@ func (l *Loop) attribute(pp []ports.ListeningPort) ([]state.Port, []state.Group)
 	l.refreshStaleConfigs()
 
 	pins, renames := l.load(st)
+	l.loadAliases(st)
 
 	resolved, index := groups.AttributeWith(pp, pins, l.registry(), l.attr.index)
 	l.attr.index = index
@@ -157,6 +159,24 @@ func (l *Loop) load(st Store) (groups.Pins, map[string]string) {
 		l.opts.Logger.Warn("reading renames", "error", err)
 	}
 	return pinSet(pins), renames
+}
+
+// loadAliases hands the index this tick's project names from `groups.rename`.
+// It runs under the ordering gate like the pin read, so a republish after a
+// rename always resolves with the name it just stored. A failed read keeps the
+// last tick's names rather than flapping every renamed project back to its
+// directory name.
+func (l *Loop) loadAliases(st Store) {
+	if st == nil {
+		l.attr.index.SetAliases(nil)
+		return
+	}
+	aliases, err := st.GroupAliases()
+	if err != nil {
+		l.opts.Logger.Warn("reading project aliases", "error", err)
+		return
+	}
+	l.attr.index.SetAliases(aliases)
 }
 
 // registry is the run registry to attribute with: the one `sonar start`

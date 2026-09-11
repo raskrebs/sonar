@@ -100,13 +100,15 @@ func TestOpenIsIdempotent(t *testing.T) {
 		t.Errorf("GetRename after reopen = %q, %v, %v; want api, true, nil", name, ok, err)
 	}
 
-	// Each migration is recorded exactly once, never re-applied.
+	// Each migration is recorded exactly once, never re-applied. Versions
+	// have gaps (003 and 004 are reserved), so count against the registered
+	// set rather than the highest number.
 	var rows int
 	if err := second.DB().QueryRow(`SELECT count(*) FROM schema_version`).Scan(&rows); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if rows != v2 {
-		t.Errorf("schema_version has %d rows for version %d", rows, v2)
+	if want := len(registeredMigrations()); rows != want {
+		t.Errorf("schema_version has %d rows, want one per registered migration (%d)", rows, want)
 	}
 }
 

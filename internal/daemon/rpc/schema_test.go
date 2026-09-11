@@ -19,7 +19,7 @@ var contractMethods = []string{
 	"ports.list", "ports.inspect", "ports.kill", "ports.rename", "ports.next",
 	"ports.wait", "ports.health", "ports.logs", "ports.graph", "ports.history",
 	"groups.list", "groups.inspect", "groups.kill", "groups.start",
-	"groups.assign", "groups.reload", "groups.init",
+	"groups.assign", "groups.reload", "groups.init", "groups.rename",
 	"runs.register", "runs.unregister", "runs.list", "runs.spawn",
 	"claims.acquire", "claims.release", "claims.list",
 	"sessions.list", "sessions.inspect", "sessions.kill",

@@ -117,6 +117,7 @@ var hostRoutes = map[string]hostRoute{
 	"groups.start":      {nameFields: []string{"name"}, portKeys: true},
 	"groups.inspect":    {nameFields: []string{"name"}},
 	"groups.config.get": {nameFields: []string{"name"}},
+	"groups.rename":     {nameFields: []string{"name"}},
 	"sessions.kill":     {nameFields: []string{"id"}, portKeys: true},
 	"sessions.inspect":  {nameFields: []string{"id"}},
 	"claims.acquire":    {portKeys: true},

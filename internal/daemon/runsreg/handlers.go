@@ -33,6 +33,7 @@ func init() {
 	daemon.RegisterHandler("runs.list", handleList)
 	daemon.RegisterHandler("runs.spawn", handleSpawn)
 	daemon.RegisterCapability("runs")
+	daemon.OnGroupRename(func(renames map[string]string) { Default.RenameGroups(renames) })
 
 	daemon.OnStart(func(rt *daemon.Runtime) {
 		if n := Default.ImportLegacy(); n > 0 {
