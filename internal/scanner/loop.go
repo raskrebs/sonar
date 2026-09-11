@@ -133,7 +133,9 @@ type Options struct {
 	Remote func() state.Rows
 
 	// Scan overrides the OS scan. Tests inject a fake; production leaves it nil
-	// and gets ports.Scan + docker.EnrichPorts + ports.Enrich.
+	// and gets ports.Scan + ports.Enrich, with container data from a
+	// docker.Watcher's cached list rather than an inline `docker ps`
+	// (step 5A.8).
 	Scan func(include Include) ([]ports.ListeningPort, error)
 
 	// Graph overrides the OS lookup of established connections between
@@ -192,6 +194,12 @@ type Loop struct {
 	statsWake chan struct{}
 
 	attr attribution
+
+	// docker keeps the container list the production scan enriches from,
+	// refreshed in the background so no scan — and so no handler queued
+	// behind one — ever waits on the docker CLI (step 5A.8). Nil when a test
+	// injects its own Scan.
+	docker *docker.Watcher
 
 	// runGate admits one OS scan at a time. It is held from a scan's first
 	// system call to its last, so two scans can never overlap and a slow one
@@ -297,12 +305,6 @@ func New(opts Options) *Loop {
 	if opts.Publish == nil {
 		opts.Publish = func(state.Snapshot, state.Snapshot, []state.Event) {}
 	}
-	if opts.Scan == nil {
-		opts.Scan = osScan
-	}
-	if opts.Graph == nil {
-		opts.Graph = osGraph
-	}
 	if opts.Probe == nil {
 		opts.Probe = ports.ProbeHealth
 	}
@@ -317,7 +319,7 @@ func New(opts Options) *Loop {
 		now = time.Now
 	}
 	base := resolveScanInterval(opts.ScanInterval)
-	return &Loop{
+	l := &Loop{
 		opts:      opts,
 		now:       now,
 		base:      base,
@@ -328,6 +330,22 @@ func New(opts Options) *Loop {
 		orderGate: make(chan struct{}, 1),
 		interval:  base,
 	}
+	if l.opts.Scan == nil {
+		// The refresh cadence is the scan cadence: scans poke the watcher,
+		// and it asks Docker at most once per base interval. A refresh that
+		// changes the list wakes the loop, so a new container's port is
+		// enriched within one tick rather than one backed-off interval.
+		l.docker = docker.NewWatcher(docker.WatcherOptions{
+			Interval: base,
+			Logger:   opts.Logger,
+			OnChange: l.Wake,
+		})
+		l.opts.Scan = l.osScan
+	}
+	if l.opts.Graph == nil {
+		l.opts.Graph = l.osGraph
+	}
+	return l
 }
 
 // resolveScanInterval clamps a configured base scan interval. Zero (the unset
@@ -370,26 +388,36 @@ func lockFor(gate chan struct{}, d time.Duration) bool {
 func unlock(gate chan struct{}) { <-gate }
 
 // osScan is the production scan: the same pipeline `sonar list` runs, so the
-// daemon and the no-daemon path emit byte-identical rows.
-func osScan(include Include) ([]ports.ListeningPort, error) {
+// daemon and the no-daemon path emit the same rows — except that container
+// data and container stats come from the watcher's cache, at most one refresh
+// old, instead of from a `docker ps` this scan would wait on. A wedged Docker
+// used to cost every scan the whole docker.CLITimeout, and every `ports.kill`
+// and `state.snapshot` queued behind it (step 5A.8).
+func (l *Loop) osScan(include Include) ([]ports.ListeningPort, error) {
 	pp, err := ports.Scan()
 	if err != nil {
 		return nil, err
 	}
-	docker.EnrichPorts(pp)
+	l.docker.Enrich(pp)
 	ports.Enrich(pp)
 	if include.Stats {
-		ports.EnrichStats(pp, docker.AllContainerStatsAsEntries())
+		ports.EnrichStats(pp, l.docker.Stats())
 	}
 	return pp, nil
 }
 
 // osGraph is the production connection graph: the established links between
-// listening ports, plus the ones Docker only knows about.
-func osGraph(listening []ports.ListeningPort) ([]ports.Connection, error) {
+// listening ports, plus the ones Docker only knows about. The container half
+// is skipped while the watcher knows Docker is not answering: it is a
+// `docker inspect` and a `docker exec` per container, each of which would
+// wait out the CLI timeout.
+func (l *Loop) osGraph(listening []ports.ListeningPort) ([]ports.Connection, error) {
 	edges, err := ports.BuildGraph(listening)
 	if err != nil {
 		return nil, err
+	}
+	if l.docker != nil && !l.docker.Healthy() {
+		return edges, nil
 	}
 	containerEdges, err := docker.BuildDockerGraph(listening)
 	if err != nil {
@@ -525,13 +553,23 @@ func (l *Loop) Wake() {
 // a 1 s load sample does not have to wait for — or reset — an adaptive port
 // scan that may be 5 s apart.
 func (l *Loop) Run(ctx context.Context) {
-	var stats sync.WaitGroup
-	stats.Add(1)
+	var background sync.WaitGroup
+	background.Add(1)
 	go func() {
-		defer stats.Done()
+		defer background.Done()
 		l.runStats(ctx)
 	}()
-	defer stats.Wait()
+	if l.docker != nil {
+		// The docker watcher refreshes the container list the scans read,
+		// in its own goroutine for the same reason: nothing on the scan
+		// path waits on the docker CLI.
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			l.docker.Run(ctx)
+		}()
+	}
+	defer background.Wait()
 
 	timer := time.NewTimer(time.Hour)
 	defer timer.Stop()

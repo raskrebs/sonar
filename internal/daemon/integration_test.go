@@ -77,6 +77,9 @@ type env struct {
 	bin    string
 	home   string
 	socket string
+	// extra is appended to every command's environment, after everything
+	// else, so it wins: a test puts a fake tool first on PATH with it.
+	extra []string
 }
 
 func newEnv(t *testing.T) *env {
@@ -169,6 +172,7 @@ func (e *env) command(args ...string) *exec.Cmd {
 		// that drive its autostart on purpose.
 		testenv.ChildEnv(),
 	)
+	cmd.Env = append(cmd.Env, e.extra...)
 	return cmd
 }
 
