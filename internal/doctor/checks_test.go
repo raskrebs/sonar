@@ -484,6 +484,19 @@ func TestDocker(t *testing.T) {
 		wantStatus(t, run(t, env, checkDocker), StatusWarn)
 	})
 
+	t.Run("hanging is reported as not answering, not as not installed", func(t *testing.T) {
+		env := fakeEnv(t)
+		env.LookPath = func(string) (string, error) { return "/usr/local/bin/docker", nil }
+		env.Docker = func(context.Context) (string, error) {
+			return "", fmt.Errorf("%w: `docker info` did not answer within 2s", ErrDockerNotAnswering)
+		}
+		got := run(t, env, checkDocker)
+		wantStatus(t, got, StatusWarn)
+		if got.Summary != "docker CLI not answering" {
+			t.Errorf("summary = %q, want %q", got.Summary, "docker CLI not answering")
+		}
+	})
+
 	t.Run("responding is ok", func(t *testing.T) {
 		env := fakeEnv(t)
 		env.LookPath = func(string) (string, error) { return "/usr/local/bin/docker", nil }

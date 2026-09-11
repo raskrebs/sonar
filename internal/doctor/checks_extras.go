@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/raskrebs/sonar/internal/daemon/rpc"
@@ -22,6 +23,15 @@ func checkDocker(ctx context.Context, env *Env) rpc.DoctorCheck {
 		}
 	}
 	version, err := env.Docker(ctx)
+	if errors.Is(err, ErrDockerNotAnswering) {
+		return rpc.DoctorCheck{
+			Status:  StatusWarn,
+			Summary: "docker CLI not answering",
+			Detail:  fmt.Sprintf("%s: %v", path, err),
+			Fix: "Docker is running but wedged: restart Docker Desktop (or the docker service); " +
+				"until then the daemon keeps the last container list it saw and retries with backoff",
+		}
+	}
 	if err != nil {
 		return rpc.DoctorCheck{
 			Status:  StatusWarn,

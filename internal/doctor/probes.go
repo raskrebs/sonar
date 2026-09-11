@@ -28,17 +28,24 @@ func ReleaseProbe(ctx context.Context) (string, error) {
 	return tag, nil
 }
 
+// ErrDockerNotAnswering is DockerProbe's error when `docker info` hangs rather
+// than failing: the backend is up but wedged, which is a different fix from a
+// Docker that is simply not running.
+var ErrDockerNotAnswering = errors.New("docker CLI not answering")
+
 // DockerProbe asks the local docker daemon for its server version, within
 // NetworkBudget. An error means the CLI is installed but its daemon is not
 // answering — the state that quietly strips container names off every listing.
+// A timeout wraps ErrDockerNotAnswering.
 func DockerProbe(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, NetworkBudget)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}")
+	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", fmt.Errorf("`docker info` did not answer within %s", NetworkBudget)
+			return "", fmt.Errorf("%w: `docker info` did not answer within %s", ErrDockerNotAnswering, NetworkBudget)
 		}
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && len(exit.Stderr) > 0 {
