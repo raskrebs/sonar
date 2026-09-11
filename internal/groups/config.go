@@ -34,12 +34,25 @@ type Service struct {
 	DependsOn   []string `yaml:"depends_on,omitempty"`
 }
 
+// MaxWorktreePorts is the largest block `worktree_ports` may ask for. It is
+// also the cap on a claim's explicit count, so a config can never ask for a
+// block the claims manager would refuse.
+const MaxWorktreePorts = 100
+
+// FieldWorktreePorts is the top-level key naming the block size a worktree
+// claims.
+const FieldWorktreePorts = "worktree_ports"
+
 // Config is a parsed `.sonar.yaml`. Path and Dir are filled by Load and are
 // not part of the file format.
 type Config struct {
 	Name     string    `yaml:"name"`
 	Services []Service `yaml:"services,omitempty"`
 	Ports    []int     `yaml:"ports,omitempty"`
+	// WorktreePorts is how many ports a claim for this project takes when the
+	// caller does not name a count (step 5A.7). Nil means the key is absent
+	// and the claims default applies.
+	WorktreePorts *int `yaml:"worktree_ports,omitempty"`
 
 	Path string `yaml:"-"` // absolute path of the file it was read from
 	Dir  string `yaml:"-"` // directory containing the file
@@ -127,6 +140,9 @@ func (c *Config) validate() []string {
 		if p < 1 || p > 65535 {
 			problems = append(problems, fmt.Sprintf("ports: %d is out of range 1-65535", p))
 		}
+	}
+	if n := c.WorktreePorts; n != nil && (*n < 1 || *n > MaxWorktreePorts) {
+		problems = append(problems, fmt.Sprintf("%s: %d is out of range 1-%d", FieldWorktreePorts, *n, MaxWorktreePorts))
 	}
 
 	seen := map[string]bool{}

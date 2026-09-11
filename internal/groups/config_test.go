@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,6 +92,21 @@ func TestLoadValidationProblems(t *testing.T) {
 			name: "port out of range",
 			body: "name: p\nservices:\n  - name: api\n    port: 70000\n",
 			want: "port 70000 is out of range",
+		},
+		{
+			name: "worktree_ports of zero",
+			body: "name: p\nworktree_ports: 0\n",
+			want: "worktree_ports: 0 is out of range 1-100",
+		},
+		{
+			name: "worktree_ports above the cap",
+			body: "name: p\nworktree_ports: 101\n",
+			want: "worktree_ports: 101 is out of range 1-100",
+		},
+		{
+			name: "worktree_ports that is not a number",
+			body: "name: p\nworktree_ports: lots\n",
+			want: "lots",
 		},
 		{
 			name: "zero port in the ports list",
@@ -207,5 +223,31 @@ func TestServiceRowLeavesMetadataNull(t *testing.T) {
 	row := ServiceRow(Service{Name: "db"})
 	if row.Description != nil || row.Icon != nil || row.Color != nil || row.Health != nil {
 		t.Fatalf("expected null metadata, got %+v", row)
+	}
+}
+
+// TestLoadWorktreePorts: the key is optional, and absent is nil rather than a
+// zero that would read as "claim nothing".
+func TestLoadWorktreePorts(t *testing.T) {
+	cfg, err := loadString(t, "shop", "name: shop\nworktree_ports: 5\n")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.WorktreePorts == nil || *cfg.WorktreePorts != 5 {
+		t.Fatalf("worktree_ports = %v, want 5", cfg.WorktreePorts)
+	}
+
+	cfg, err = loadString(t, "plain", "name: plain\n")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.WorktreePorts != nil {
+		t.Fatalf("worktree_ports = %d, want nil for a file without the key", *cfg.WorktreePorts)
+	}
+
+	for _, n := range []int{1, MaxWorktreePorts} {
+		if _, err := loadString(t, "edge", fmt.Sprintf("name: edge\nworktree_ports: %d\n", n)); err != nil {
+			t.Errorf("worktree_ports %d should be valid: %v", n, err)
+		}
 	}
 }
