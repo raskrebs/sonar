@@ -60,6 +60,8 @@ type reading struct {
 type Collector struct {
 	now  func() time.Time
 	read func(context.Context) (reading, error)
+	// gpu is the GPU cache; nil collects no GPUs (GPUs stay null).
+	gpu *gpuSampler
 
 	mu       sync.Mutex
 	prev     cpuSample
@@ -67,17 +69,25 @@ type Collector struct {
 	havePrev bool
 }
 
-// New builds a Collector reading this OS.
+// New builds a Collector reading this OS. Only the daemon builds one: the CLI
+// reads host load from the daemon and never collects it in-process, so the GPU
+// sampler's forks never land on a CLI command's path.
 func New() *Collector {
-	return &Collector{now: time.Now, read: readHost}
+	return &Collector{now: time.Now, read: readHost, gpu: newGPUSampler(probeGPU)}
 }
 
 // Collect returns the local machine as a state.Host. The identity fields the
 // daemon owns — daemon and protocol version, the port and group counts — are
 // left to the caller; everything the OS knows is filled in here.
 //
-// CPUPercent is null on the first call: one sample is not a measurement.
+// CPUPercent is null on the first call: one sample is not a measurement. GPUs
+// is the GPU sampler's cached reading (see gpuSampler): Collect never waits on
+// a GPU read, so it is null for the first few seconds of a daemon's life.
 func (c *Collector) Collect(ctx context.Context) (state.Host, error) {
+	var gpus []state.GPU
+	if c.gpu != nil {
+		gpus = c.gpu.Latest()
+	}
 	r, err := c.read(ctx)
 	at := c.now()
 	h := state.Host{
@@ -93,6 +103,7 @@ func (c *Collector) Collect(ctx context.Context) (state.Host, error) {
 		MemoryUsed: r.memUsed, MemoryTotal: r.memTotal,
 		DiskUsed: r.diskUsed, DiskTotal: r.diskTotal,
 		DiskPath: r.diskPath,
+		GPUs:     gpus,
 		LastSeen: at.Format(time.RFC3339),
 	}
 	h.CPUPercent = c.cpuPercent(r.cpu, at)

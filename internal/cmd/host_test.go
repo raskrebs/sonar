@@ -51,6 +51,38 @@ func TestHostTableIsGolden(t *testing.T) {
 	}
 }
 
+// GPUs print one line each under their host: a unified-memory GPU shows what
+// it holds, a discrete one used/total, and an unknown reading a dash. A host
+// whose GPUs were not collected, or that has none, prints no GPU line at all.
+func TestHostTableListsGPUsUnderTheirHost(t *testing.T) {
+	util, used := 21.0, int64(1536)<<20
+	vramUsed, vramTotal := int64(2)<<30, int64(24)<<30
+	mac := hostFixture()
+	mac.Name = "mac"
+	mac.GPUs = []state.GPU{{Name: "Apple M5 Pro", UtilizationPercent: &util, MemoryUsedBytes: &used}}
+	gpuBox := hostFixture()
+	gpuBox.Name = "gpubox"
+	gpuBox.GPUs = []state.GPU{
+		{Name: "NVIDIA GeForce RTX 4090", MemoryUsedBytes: &vramUsed, MemoryTotalBytes: &vramTotal},
+	}
+	none := hostFixture()
+	none.Name = "none"
+	none.GPUs = []state.GPU{}
+
+	var buf bytes.Buffer
+	renderHosts(&buf, []state.Host{mac, gpuBox, none, hostFixture()})
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) != 7 {
+		t.Fatalf("got %d lines, want header + 4 hosts + 2 GPU lines:\n%s", len(lines), buf.String())
+	}
+	if want := "  gpu Apple M5 Pro  21%  1.5 GiB in use"; lines[2] != want {
+		t.Errorf("unified GPU line = %q, want %q", lines[2], want)
+	}
+	if want := "  gpu NVIDIA GeForce RTX 4090  -  2.0/24.0 GiB"; lines[4] != want {
+		t.Errorf("discrete GPU line = %q, want %q", lines[4], want)
+	}
+}
+
 func TestHostTableWithNoHosts(t *testing.T) {
 	var buf bytes.Buffer
 	renderHosts(&buf, nil)

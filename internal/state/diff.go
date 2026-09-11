@@ -1,6 +1,9 @@
 package state
 
-import "reflect"
+import (
+	"math"
+	"reflect"
+)
 
 // Diff computes the delta from prev to next, ignoring Stats when deciding
 // whether a port changed — a busy process must not produce a delta on every
@@ -55,10 +58,42 @@ func DiffHosts(prev, next []Host) Change[Host] {
 // latency: both move on every tick by construction, and comparing them would
 // publish a `hosts` delta forever on a machine where nothing is happening. The
 // newest values still ride out with the next real change.
+//
+// GPUs are compared at the resolution a meter shows: whole percent and whole
+// MiB. Unified GPU memory moves by a few bytes on every read, and a delta for
+// that would be noise; the precise value still rides out with the next real
+// change. Null and [] stay distinct — "not collected" to "no GPU" is news.
 func hostsEqual(a, b Host) bool {
 	a.LastSeen, b.LastSeen = "", ""
 	a.LatencyMs, b.LatencyMs = 0, 0
+	a.GPUs, b.GPUs = gpusKey(a.GPUs), gpusKey(b.GPUs)
 	return reflect.DeepEqual(a, b)
+}
+
+// gpusKey is the part of a GPU list a change is measured on.
+func gpusKey(gpus []GPU) []GPU {
+	if gpus == nil {
+		return nil
+	}
+	out := make([]GPU, len(gpus))
+	for i, g := range gpus {
+		out[i] = GPU{Name: g.Name}
+		if g.UtilizationPercent != nil {
+			v := math.Round(*g.UtilizationPercent)
+			out[i].UtilizationPercent = &v
+		}
+		out[i].MemoryUsedBytes = mib(g.MemoryUsedBytes)
+		out[i].MemoryTotalBytes = mib(g.MemoryTotalBytes)
+	}
+	return out
+}
+
+func mib(v *int64) *int64 {
+	if v == nil {
+		return nil
+	}
+	m := *v >> 20
+	return &m
 }
 
 // diffPorts keys ports by Key() and treats a PID change as remove + add.

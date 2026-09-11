@@ -929,6 +929,50 @@
         "stopped"
       ]
     },
+    "GPU": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "utilization_percent": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "memory_used_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "memory_total_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "required": [
+        "name",
+        "utilization_percent",
+        "memory_used_bytes",
+        "memory_total_bytes"
+      ]
+    },
     "GraphEdge": {
       "properties": {
         "from_port": {
@@ -1694,6 +1738,19 @@
         "disk_path": {
           "type": "string"
         },
+        "gpus": {
+          "oneOf": [
+            {
+              "items": {
+                "$ref": "#/definitions/GPU"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "ports": {
           "type": "integer"
         },
@@ -1724,6 +1781,7 @@
         "disk_used_bytes",
         "disk_total_bytes",
         "disk_path",
+        "gpus",
         "ports",
         "groups",
         "last_seen"

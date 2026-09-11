@@ -36,6 +36,11 @@ var AllHostStatuses = []string{
 //     provide them.
 //   - StatusReason is null while nothing is wrong. For localhost it carries
 //     the collector's error when a tick could not read the machine's load.
+//   - GPUs is null when the GPUs were not collected: a platform with no
+//     source (Windows, a Linux box with neither nvidia-smi nor an amdgpu
+//     card), the daemon's first seconds, a read that failed or timed out, or
+//     a remote daemon too old to send the field. An empty list means they
+//     were collected and there are none.
 //
 // Kernel is the release string ("6.8.0-40-generic", "25.6.0", "10.0.26100")
 // and is empty, not null, when the platform lookup fails.
@@ -58,6 +63,7 @@ type Host struct {
 	DiskUsed        *int64    `json:"disk_used_bytes" jsonschema:"nullable"`
 	DiskTotal       *int64    `json:"disk_total_bytes" jsonschema:"nullable"`
 	DiskPath        string    `json:"disk_path"`
+	GPUs            []GPU     `json:"gpus" jsonschema:"nullable"`
 	Ports           int       `json:"ports"`
 	Groups          int       `json:"groups"`
 	LastSeen        string    `json:"last_seen"`

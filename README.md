@@ -463,6 +463,13 @@ is null rather than zero. Every host registered with `sonar remote add` joins
 the same table with its own load. The command needs a running daemon: it is the
 daemon that holds the previous sample a percentage is measured against.
 
+GPUs are listed under their host with utilization and memory: from `ioreg` on
+macOS (Apple silicon memory is unified, so only what the GPU holds is shown),
+and from `nvidia-smi` or amdgpu's sysfs counters on Linux. The daemon reads them
+every five seconds in the background, never on a command's path; `gpus` is null
+where there is no source (Windows, Intel-only Linux) and `[]` on a machine with
+no GPU.
+
 ### `sonar remote install`
 
 ```sh

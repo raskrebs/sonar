@@ -93,7 +93,32 @@ func renderHosts(w io.Writer, hosts []state.Host) {
 			display.Cyan(h.Name), hostStatus(h.Status), osArch(h),
 			hostUptime(h.UptimeS), hostPercent(h.CPUPercent), hostLoad(h.Load),
 			hostUsage(h.MemoryUsed, h.MemoryTotal), hostUsage(h.DiskUsed, h.DiskTotal))
+		for _, g := range h.GPUs {
+			fmt.Fprintf(w, "  %s %s  %s  %s\n", display.Dim("gpu"), g.Name,
+				gpuPercent(g.UtilizationPercent), gpuMemory(g.MemoryUsedBytes, g.MemoryTotalBytes))
+		}
 	}
+}
+
+// gpuPercent prints a GPU's utilization; every source counts whole percent.
+func gpuPercent(pct *float64) string {
+	if pct == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.0f%%", *pct)
+}
+
+// gpuMemory prints "used/total" when the GPU has memory of its own, and just
+// what it holds on unified memory, where there is no total to compare with.
+func gpuMemory(used, total *int64) string {
+	if used == nil {
+		return "-"
+	}
+	if total != nil && *total > 0 {
+		return hostUsage(used, total)
+	}
+	unit, name := sizeUnit(*used)
+	return fmt.Sprintf("%.1f %s in use", float64(*used)/unit, name)
 }
 
 func hostStatus(status string) string {
