@@ -4,11 +4,14 @@ package state
 // the port the service is actually listening on right now, resolved by the
 // group resolver (spec 3 needs this join).
 type Service struct {
-	Name   string  `json:"name"`
-	Cmd    string  `json:"cmd"`
-	Cwd    string  `json:"cwd"`
-	Port   *int    `json:"port" jsonschema:"nullable"`
-	Health *string `json:"health" jsonschema:"nullable"`
+	Name string `json:"name"`
+	Cmd  string `json:"cmd"`
+	Cwd  string `json:"cwd"`
+	Port *int   `json:"port" jsonschema:"nullable"`
+	// PortAuto is `port: auto`: the daemon assigns the port when it starts the
+	// service, so Port is null and PortActual says where it is running.
+	PortAuto bool    `json:"port_auto"`
+	Health   *string `json:"health" jsonschema:"nullable"`
 	// Description, Icon and Color are user-authored metadata from
 	// `sonar.yaml` (contract §13.1). The daemon stores and serves them; what
 	// an icon or a colour means is the client's business.

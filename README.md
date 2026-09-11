@@ -239,6 +239,38 @@ ports: [9229]        # ports that belong to this project without a service
   never infers them.
 - `depends_on` — start order. Naming a service that is not in the file, or a
   cycle, is an error; an invalid file is reported once and never stops a scan.
+- `env` — variables set for the service when sonar starts it.
+
+#### `port: auto` and references
+
+A service can leave its port to sonar, and find the others through its
+environment instead of a hard-coded `localhost:8080`:
+
+```yaml
+services:
+  - name: api
+    cmd: uv run uvicorn app:app --port ${port}
+    port: auto
+  - name: frontend
+    cmd: npm run dev -- --port ${port} --strictPort
+    port: auto
+    depends_on: [api]
+    env:
+      VITE_API_URL: ${api.url}
+```
+
+`sonar up` claims a free port for every `port: auto` service it starts: the
+same one each time in the same checkout, and a different one in every other
+checkout, so a worktree never collides with the main one. The service gets it
+as `PORT`, `SONAR_PORT` and `${port}`, and it has to use it — read `PORT`, or
+pass `${port}` on its command line. A service that is already running keeps
+its port, so one started later still finds it.
+
+`${port}` and `${url}` (`http://localhost:<port>`) are the service's own;
+`${<service>.port}` and `${<service>.url}` are another's. They work in `cmd`
+and in `env`. A reference to a service that is not in the file, or to one with
+no port, is an error when the file is loaded. Anything else between `${` and
+`}`, like `${HOME}`, is left exactly as written.
 
 `sonar.yml` is read if that is how you spell it; `sonar init` always writes
 `sonar.yaml`. The file used to be the dotfile `.sonar.yaml`, and that name
@@ -267,12 +299,14 @@ sonar up --json
 Starts every service the group's `sonar.yaml` declares, in `depends_on` order:
 a service waits for the ports its dependencies declare before it is started, and
 one that is already listening is skipped. Each runs detached in its own process
-group, with its output in `~/.config/sonar/logs/<group>/<service>.log`.
+group, with its output in `~/.config/sonar/logs/<group>/<service>.log`, and with
+the environment of the shell you ran `sonar up` in, plus `PORT` for a service
+with a port.
 
 ```
-  ✓ db        pid 41022  ~/.config/sonar/logs/my-app/db.log
+  ✓ db        port 5432  pid 41022  ~/.config/sonar/logs/my-app/db.log
   - api       already running
-  ✓ frontend  pid 41108  ~/.config/sonar/logs/my-app/frontend.log
+  ✓ frontend  port 5173  pid 41108  ~/.config/sonar/logs/my-app/frontend.log
 
 2 started, 1 already running
 ```

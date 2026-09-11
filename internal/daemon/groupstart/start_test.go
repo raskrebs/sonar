@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,9 @@ import (
 const (
 	envListen = "SONAR_TEST_LISTEN"
 	envDelay  = "SONAR_TEST_LISTEN_DELAY"
+	// envEcho names variables, comma separated, the child prints as NAME=value
+	// before it listens, so a test can read the environment a service got.
+	envEcho = "SONAR_TEST_ECHO"
 )
 
 // TestMain doubles as the service a group starts. A service is not a test run,
@@ -40,6 +44,11 @@ func TestMain(m *testing.M) {
 	}
 	if d, err := time.ParseDuration(os.Getenv(envDelay)); err == nil && d > 0 {
 		time.Sleep(d)
+	}
+	for _, name := range strings.Split(os.Getenv(envEcho), ",") {
+		if name != "" {
+			fmt.Printf("%s=%s\n", name, os.Getenv(name))
+		}
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:"+os.Getenv("SONAR_PORT"))
 	if err != nil {
@@ -122,6 +131,53 @@ func probeScan(dir string, watch []int) func(scanner.Include) ([]ports.Listening
 // returns a connected client.
 func startDaemon(t *testing.T, ctx context.Context, dir string, watch []int) *client.Client {
 	t.Helper()
+	return startDaemonWith(t, ctx, probeScan(dir, watch))
+}
+
+// watchList is a scan's watch list that grows while a test runs: a `port:
+// auto` service's port is only known once groups.start reports it.
+type watchList struct {
+	mu   sync.Mutex
+	pids map[int]int // port -> pid of the service listening on it
+}
+
+func (w *watchList) add(port, pid int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.pids == nil {
+		w.pids = map[int]int{}
+	}
+	w.pids[port] = pid
+}
+
+// watchScan dials every watched port and reports the ones that answer,
+// attributed to the service's own pid so the run registry claims them the way
+// it claims a real listener in a service's process tree.
+func watchScan(dir string, w *watchList) func(scanner.Include) ([]ports.ListeningPort, error) {
+	return func(scanner.Include) ([]ports.ListeningPort, error) {
+		w.mu.Lock()
+		watched := make(map[int]int, len(w.pids))
+		for port, pid := range w.pids {
+			watched[port] = pid
+		}
+		w.mu.Unlock()
+		var out []ports.ListeningPort
+		for port, pid := range watched {
+			if !dialable(port) {
+				continue
+			}
+			out = append(out, ports.ListeningPort{
+				Port: port, BindAddress: "127.0.0.1", IPVersion: "ipv4",
+				PID: pid, Process: "listener", Cwd: dir,
+			})
+		}
+		return out, nil
+	}
+}
+
+// startDaemonWith is startDaemon with the scan supplied by the caller.
+func startDaemonWith(t *testing.T, ctx context.Context, scan func(scanner.Include) ([]ports.ListeningPort, error)) *client.Client {
+	t.Helper()
 	// A unix socket path is capped at ~104 bytes, and t.TempDir() spells the
 	// test's name into the path, so the socket gets its own short directory.
 	sockDir, err := os.MkdirTemp("", "sn")
@@ -137,7 +193,7 @@ func startDaemon(t *testing.T, ctx context.Context, dir string, watch []int) *cl
 		DBPath:  filepath.Join(sockDir, "sonar.db"),
 		Scanner: scanner.New(scanner.Options{
 			DaemonVersion: "test",
-			Scan:          probeScan(dir, watch),
+			Scan:          scan,
 		}),
 	})
 	serveErr := make(chan error, 1)
@@ -305,6 +361,126 @@ services:
 	}
 
 	t.Cleanup(func() { killPIDs(chunks) })
+}
+
+// TestAutoPortsAreAssignedAndReferenced: two `port: auto` services get ports
+// from the claim range, api waits for db on db's assigned port, and api's env
+// carries db's port through ${db.port} next to what the caller sent.
+func TestAutoPortsAreAssignedAndReferenced(t *testing.T) {
+	skipOnWindows(t)
+	dir := isolate(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := serviceCmd(t)
+	path := writeConfig(t, dir, fmt.Sprintf(`name: autotest
+services:
+  - name: api
+    cmd: %s
+    port: auto
+    depends_on: [db]
+    env:
+      SONAR_TEST_ECHO: DB_URL,FROM_CALLER,PORT
+      DB_URL: postgres://localhost:${db.port}/app
+  - name: db
+    cmd: %s
+    port: auto
+`, cmd, cmd))
+
+	watch := &watchList{}
+	c := startDaemonWith(t, ctx, watchScan(dir, watch))
+
+	var start rpc.GroupsStartResult
+	s, err := c.Stream(ctx, "groups.start", rpc.GroupsStartParams{
+		ConfigPath: &path,
+		Env:        map[string]string{"FROM_CALLER": "yes"},
+	}, &start)
+	if err != nil {
+		t.Fatalf("groups.start: %v", err)
+	}
+	defer s.Close()
+
+	chunks, end := collectWatching(t, s, watch)
+	t.Cleanup(func() { killPIDs(chunks) })
+	if len(end.Started) != 2 || len(end.Errors) != 0 {
+		dumpLogs(t, chunks)
+		t.Fatalf("end = %+v, chunks = %+v", end, chunks)
+	}
+	db, api := chunks[0], chunks[1]
+	if db.Service != "db" || api.Service != "api" {
+		t.Fatalf("order = %s, %s; want db then api", db.Service, api.Service)
+	}
+	for _, ch := range chunks {
+		if ch.Port < 10000 || ch.Port > 32699 {
+			t.Errorf("%s port = %d, want one from the claim range", ch.Service, ch.Port)
+		}
+	}
+	if db.Port == api.Port {
+		t.Fatalf("db and api were both given %d", db.Port)
+	}
+
+	want := []string{
+		fmt.Sprintf("DB_URL=postgres://localhost:%d/app", db.Port),
+		"FROM_CALLER=yes",
+		fmt.Sprintf("PORT=%d", api.Port),
+		fmt.Sprintf("listening on %d", api.Port),
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		raw, _ := os.ReadFile(api.LogPath)
+		missing := ""
+		for _, w := range want {
+			if !strings.Contains(string(raw), w) {
+				missing = w
+				break
+			}
+		}
+		if missing == "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("api log is missing %q:\n%s", missing, raw)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// collectWatching is collect for a scan whose watch list grows: every service
+// reported started is added to it, so the next scan sees its port.
+func collectWatching(t *testing.T, s *client.Stream, w *watchList) ([]rpc.GroupsStartChunk, rpc.GroupsStartEnd) {
+	t.Helper()
+	var chunks []rpc.GroupsStartChunk
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for raw := range s.Chunks() {
+			var c rpc.GroupsStartChunk
+			if err := json.Unmarshal(raw, &c); err != nil {
+				t.Errorf("decoding a chunk: %v", err)
+				continue
+			}
+			if c.Port > 0 && c.PID > 0 {
+				w.add(c.Port, c.PID)
+			}
+			chunks = append(chunks, c)
+		}
+	}()
+	select {
+	case end := <-s.End():
+		<-done
+		if end.Err != nil {
+			t.Fatalf("stream ended with an error: %v", end.Err)
+		}
+		var summary rpc.GroupsStartEnd
+		if err := end.Decode(&summary); err != nil {
+			t.Fatalf("decoding the end payload: %v", err)
+		}
+		return chunks, summary
+	case <-time.After(60 * time.Second):
+		t.Fatal("groups.start never ended")
+		return nil, rpc.GroupsStartEnd{}
+	}
 }
 
 // TestSkipsServicesThatAreAlreadyRunning: `sonar up` is safe to run twice.

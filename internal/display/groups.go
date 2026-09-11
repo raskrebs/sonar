@@ -110,6 +110,8 @@ func RenderGroup(w io.Writer, g state.Group, pp []ports.ListeningPort) {
 		want := ""
 		if s.Port != nil {
 			want = strconv.Itoa(*s.Port)
+		} else if s.PortAuto {
+			want = "auto"
 		}
 		status := Dim("stopped")
 		if s.Running {

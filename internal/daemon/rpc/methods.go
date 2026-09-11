@@ -369,6 +369,11 @@ type GroupsStartParams struct {
 	ConfigPath       *string  `json:"config_path,omitempty"`
 	Only             []string `json:"only,omitempty"`
 	AllowOutsideHome bool     `json:"allow_outside_home,omitempty"`
+	// Env is the environment the services start in, layered over the
+	// daemon's own. The CLI sends its shell's, so a service sees the PATH,
+	// toolchain and virtualenv it was started from rather than the daemon's.
+	// Omitted, the services get the daemon's environment.
+	Env map[string]string `json:"env,omitempty"`
 }
 
 type GroupsStartResult struct {
@@ -382,6 +387,9 @@ type GroupsStartResult struct {
 type GroupsStartChunk struct {
 	Service string `json:"service"`
 	PID     int    `json:"pid,omitempty"`
+	// Port is the port a started service was told to bind: its fixed port,
+	// or the one assigned for `port: auto`. Zero for a service with none.
+	Port    int    `json:"port,omitempty"`
 	LogPath string `json:"log_path,omitempty"`
 	Skipped bool   `json:"skipped,omitempty"`
 	Reason  string `json:"reason,omitempty"`

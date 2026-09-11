@@ -82,12 +82,11 @@ func matchService(cfg *groups.Config, cwd string, argv []string) (string, bool) 
 	if cfg == nil || len(argv) == 0 {
 		return "", false
 	}
-	want := strings.Join(argv, "\x00")
 	for _, svc := range cfg.Services {
 		if svc.Cmd == "" {
 			continue
 		}
-		if strings.Join(splitCmd(svc.Cmd), "\x00") != want {
+		if !argvMatches(splitCmd(svc.Cmd), argv) {
 			continue
 		}
 		if svc.Cwd != "" && groups.Canonical(cfg.ServiceDir(svc)) != cwd {
@@ -96,6 +95,21 @@ func matchService(cfg *groups.Config, cwd string, argv []string) (string, bool) 
 		return svc.Name, true
 	}
 	return "", false
+}
+
+// argvMatches compares a service's cmd, split, with a command being started.
+// A token carrying a reference (`--port ${port}`) matches whatever it would
+// have expanded to, so a command typed out by hand still finds its service.
+func argvMatches(pattern, argv []string) bool {
+	if len(pattern) != len(argv) {
+		return false
+	}
+	for i := range pattern {
+		if !groups.MatchesExpanded(pattern[i], argv[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // SplitCmd turns a `sonar.yaml` `cmd:` string into argv with shell-style

@@ -70,7 +70,7 @@ func Plan(cfg *Config, only []string) ([]Step, error) {
 		step := Step{Service: s}
 		for _, dep := range s.DependsOn {
 			d, ok := byName[dep]
-			if !ok || d.Port == 0 {
+			if !ok || !d.HasPort() {
 				continue
 			}
 			step.Waits = append(step.Waits, d)

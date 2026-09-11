@@ -1552,6 +1552,9 @@
         "pid": {
           "type": "integer"
         },
+        "port": {
+          "type": "integer"
+        },
         "log_path": {
           "type": "string"
         },
@@ -1617,6 +1620,12 @@
         },
         "allow_outside_home": {
           "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "type": "object"
@@ -3395,6 +3404,9 @@
             }
           ]
         },
+        "port_auto": {
+          "type": "boolean"
+        },
         "health": {
           "oneOf": [
             {
@@ -3461,6 +3473,7 @@
         "cmd",
         "cwd",
         "port",
+        "port_auto",
         "health",
         "description",
         "icon",

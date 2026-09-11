@@ -67,6 +67,22 @@ func TestPlanWaitsOnlyOnPortedDependencies(t *testing.T) {
 	}
 }
 
+// TestPlanWaitsOnAutoPorts: a `port: auto` dependency has a port to wait for,
+// even though the file names no number.
+func TestPlanWaitsOnAutoPorts(t *testing.T) {
+	cfg := &Config{Name: "demo", Services: []Service{
+		{Name: "db", Cmd: "postgres", PortAuto: true},
+		{Name: "api", Cmd: "uv run api", PortAuto: true, DependsOn: []string{"db"}},
+	}}
+	steps, err := Plan(cfg, nil)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if len(steps) != 2 || len(steps[1].Waits) != 1 || steps[1].Waits[0].Name != "db" {
+		t.Fatalf("steps = %+v, want api waiting on db", steps)
+	}
+}
+
 // TestPlanOnlyFilters keeps the dependency order among what is left and does
 // not drag unnamed services in.
 func TestPlanOnlyFilters(t *testing.T) {

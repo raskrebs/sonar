@@ -201,6 +201,20 @@ func (r *Registry) Run(p state.Port) (state.Run, bool) {
 	return state.Run{}, false
 }
 
+// PortHint implements groups.PortHints: the port a live run of this service
+// was started to bind, which for a `port: auto` service is the one groups.start
+// assigned it.
+func (r *Registry) PortHint(group, service string) (int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, rec := range r.runs {
+		if rec.Group == group && rec.Name == service && rec.PortHint > 0 {
+			return rec.PortHint, true
+		}
+	}
+	return 0, false
+}
+
 // Session implements groups.SessionRegistry: it reports the agent session that
 // started the run owning this port, using the same PPID walk the run
 // attribution uses, so a port and its run can never disagree about who started

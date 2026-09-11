@@ -59,6 +59,14 @@ func Key(project, worktree string) string {
 	return p + "/" + w
 }
 
+// ServiceKey is the claim key for one `port: auto` service in one checkout:
+// the checkout's key plus the service name, so the service gets the same port
+// every time that checkout starts it, and a different one in every other
+// checkout of the project.
+func ServiceKey(project, worktree, service string) string {
+	return Key(project, worktree) + "/" + strings.TrimSpace(service)
+}
+
 // SplitKey recovers the project and worktree a key was built from. A key with
 // no separator is all project, with the worktree defaulted.
 func SplitKey(key string) (project, worktree string) {

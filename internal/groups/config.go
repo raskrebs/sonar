@@ -70,15 +70,96 @@ func TargetIn(dir string) string {
 // interprets: it carries them onto state.Service so a client can render them
 // (contract §13.1).
 type Service struct {
-	Name        string   `yaml:"name"`
-	Cmd         string   `yaml:"cmd,omitempty"`
-	Cwd         string   `yaml:"cwd,omitempty"`
-	Port        int      `yaml:"port,omitempty"`
+	Name string `yaml:"name"`
+	Cmd  string `yaml:"cmd,omitempty"`
+	Cwd  string `yaml:"cwd,omitempty"`
+	// Port is the port the service binds, or 0 when it declares none or when
+	// PortAuto is set.
+	Port int `yaml:"port,omitempty"`
+	// PortAuto is `port: auto`: the daemon picks the port when it starts the
+	// service — the same one every time for the same checkout, and a
+	// different one in every other checkout — and hands it over as PORT,
+	// SONAR_PORT and ${port}.
+	PortAuto    bool     `yaml:"-"`
 	Health      string   `yaml:"health,omitempty"`
 	Description string   `yaml:"description,omitempty"`
 	Icon        string   `yaml:"icon,omitempty"`
 	Color       string   `yaml:"color,omitempty"`
 	DependsOn   []string `yaml:"depends_on,omitempty"`
+	// Env is added to the service's environment when sonar starts it. Values
+	// may refer to ports with ${port}, ${url}, ${<service>.port} and
+	// ${<service>.url}.
+	Env map[string]string `yaml:"env,omitempty"`
+}
+
+// PortAutoValue is the `port:` value that asks the daemon to pick the port.
+const PortAutoValue = "auto"
+
+// HasPort reports whether the service declares a port, fixed or auto.
+func (s Service) HasPort() bool { return s.Port != 0 || s.PortAuto }
+
+// UnmarshalYAML reads `port: auto` into PortAuto and every other key as usual.
+// Any other non-number port is refused with a message that names both forms,
+// rather than the decoder's own "cannot unmarshal !!str".
+func (s *Service) UnmarshalYAML(n *yaml.Node) error {
+	type plain Service
+	if n.Kind != yaml.MappingNode {
+		var p plain
+		if err := n.Decode(&p); err != nil {
+			return err
+		}
+		*s = Service(p)
+		return nil
+	}
+	auto := false
+	stripped := *n
+	stripped.Content = make([]*yaml.Node, 0, len(n.Content))
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k, v := n.Content[i], n.Content[i+1]
+		if k.Value == "port" && v.Kind == yaml.ScalarNode {
+			switch tag := v.ShortTag(); {
+			case tag == "!!int" || tag == "!!null":
+			case v.Value == PortAutoValue:
+				auto = true
+				continue
+			default:
+				return fmt.Errorf("line %d: port must be a number or %s, not %q", v.Line, PortAutoValue, v.Value)
+			}
+		}
+		stripped.Content = append(stripped.Content, k, v)
+	}
+	var p plain
+	if err := stripped.Decode(&p); err != nil {
+		return err
+	}
+	*s = Service(p)
+	s.PortAuto = auto
+	return nil
+}
+
+// MarshalYAML writes PortAuto back as `port: auto`, where a number would be.
+func (s Service) MarshalYAML() (any, error) {
+	type plain Service
+	if !s.PortAuto {
+		return plain(s), nil
+	}
+	var n yaml.Node
+	if err := n.Encode(plain(s)); err != nil {
+		return nil, err
+	}
+	at := 0
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		switch n.Content[i].Value {
+		case "name", "cmd", "cwd":
+			at = i + 2
+		}
+	}
+	pair := []*yaml.Node{
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: "port"},
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: PortAutoValue},
+	}
+	n.Content = append(n.Content[:at], append(pair, n.Content[at:]...)...)
+	return &n, nil
 }
 
 // MaxWorktreePorts is the largest block `worktree_ports` may ask for. It is
@@ -210,6 +291,12 @@ func (c *Config) validate() []string {
 		if s.Cwd != "" && !c.cwdInside(s.Cwd) {
 			problems = append(problems, fmt.Sprintf("%s: cwd %q escapes the directory holding %s", where, s.Cwd, ConfigName))
 		}
+		for key := range s.Env {
+			if !envKey.MatchString(key) {
+				problems = append(problems, fmt.Sprintf("%s: env %q is not a variable name", where, key))
+			}
+		}
+		problems = append(problems, c.refProblems(s, where)...)
 	}
 
 	for _, s := range c.Services {

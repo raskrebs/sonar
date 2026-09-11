@@ -115,13 +115,17 @@ func (l *Loop) attribute(pp []ports.ListeningPort) ([]state.Port, []state.Group)
 	pins, renames := l.load(st)
 	l.loadAliases(st)
 
-	resolved, index := groups.AttributeWith(pp, pins, l.registry(), l.attr.index)
+	reg := l.registry()
+	resolved, index := groups.AttributeWith(pp, pins, reg, l.attr.index)
 	l.attr.index = index
 
 	applyRenames(renames, resolved, pp)
 	l.rememberRoots(st, index)
 
-	return resolved, groups.Groups(resolved, index)
+	// A registry that knows the ports it assigned lets a `port: auto` service
+	// join its listener even when that listener is not in its process tree.
+	hints, _ := reg.(groups.PortHints)
+	return resolved, groups.GroupsWith(resolved, index, hints)
 }
 
 // seedRoots loads the known `sonar.yaml` roots into the index once, so a

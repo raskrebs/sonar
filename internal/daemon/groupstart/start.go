@@ -12,6 +12,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,7 +77,7 @@ func handleGroupsStart(ctx context.Context, req *daemon.Request) (any, error) {
 	rt := req.Runtime
 	initial := rpc.GroupsStartResult{MutationResult: rpc.MutationResult{OK: true, Affected: []string{}}}
 	return daemon.StartStream(ctx, req, initial, func(ctx context.Context, s *daemon.Stream) (any, error) {
-		return run(ctx, rt, s, cfg, group, plan, p.AllowOutsideHome), nil
+		return run(ctx, rt, s, cfg, group, plan, p), nil
 	})
 }
 
@@ -82,9 +85,10 @@ func handleGroupsStart(ctx context.Context, req *daemon.Request) (any, error) {
 // A service that fails never stops the ones after it: the caller asked for the
 // group, and a partial group is more useful than none.
 func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
-	cfg *groups.Config, group string, plan []groups.Step, allowOutsideHome bool) rpc.GroupsStartEnd {
+	cfg *groups.Config, group string, plan []groups.Step, p rpc.GroupsStartParams) rpc.GroupsStartEnd {
 
 	end := rpc.GroupsStartEnd{Started: []string{}, Skipped: []string{}, Errors: []string{}}
+	book := newAddressBook(rt, cfg, group)
 
 	for _, step := range plan {
 		if ctx.Err() != nil {
@@ -98,7 +102,7 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			continue
 		}
 
-		if err := waitFor(ctx, rt, group, step.Waits); err != nil {
+		if err := waitFor(ctx, rt, group, step.Waits, book); err != nil {
 			if ctx.Err() != nil {
 				return end
 			}
@@ -107,40 +111,186 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			continue
 		}
 
-		h, err := start(ctx, rt, cfg, group, svc, allowOutsideHome)
+		h, err := start(ctx, rt, cfg, group, svc, book, p)
 		if err != nil {
 			rt.Logger.Warn("starting a service", "group", group, "service", svc.Name, "error", err)
 			_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, Error: detail(err)})
 			end.Errors = append(end.Errors, svc.Name)
 			continue
 		}
-		_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, PID: h.PID, LogPath: h.LogPath})
+		_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, PID: h.PID, Port: h.PortHint, LogPath: h.LogPath})
 		end.Started = append(end.Started, svc.Name)
 	}
 	return end
 }
 
 // start spawns one service through the run registry, so the ports it opens are
-// attributed to this group and this service name.
+// attributed to this group and this service name. Its references are expanded
+// and its environment built here, once every port it names is known.
 func start(ctx context.Context, rt *daemon.Runtime, cfg *groups.Config, group string,
-	svc groups.Service, allowOutsideHome bool) (*spawn.Handle, error) {
+	svc groups.Service, book *addressBook, p rpc.GroupsStartParams) (*spawn.Handle, error) {
 
 	argv := spawn.SplitCmd(svc.Cmd)
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("service %s has no cmd to run", svc.Name)
 	}
-	cwd, err := runsreg.CheckCwd(cfg.ServiceDir(svc), allowOutsideHome)
+	ports, err := book.forService(svc)
 	if err != nil {
 		return nil, err
 	}
+	// Expanded after splitting, so a value can never change how the command
+	// splits into arguments.
+	for i := range argv {
+		argv[i] = groups.Expand(argv[i], svc.Name, ports)
+	}
+	cwd, err := runsreg.CheckCwd(cfg.ServiceDir(svc), p.AllowOutsideHome)
+	if err != nil {
+		return nil, err
+	}
+	port := ports[svc.Name]
 	return runsreg.Spawn(ctx, rt, spawn.Request{
 		Argv:     argv,
 		Cwd:      cwd,
+		Env:      serviceEnv(p.Env, svc, port, ports),
 		Group:    group,
 		Name:     svc.Name,
-		PortHint: svc.Port,
+		PortHint: port,
 		LogPath:  spawn.LogPath(group, svc.Name),
 	})
+}
+
+// serviceEnv is the environment a service starts in, each layer winning over
+// the one before: the daemon's own, the caller's (the CLI sends its shell's),
+// PORT for a service with a port, and the service's own `env:` with its
+// references expanded. SONAR_PORT and the other run variables are added by
+// spawn on top of all of it.
+func serviceEnv(caller map[string]string, svc groups.Service, port int, ports map[string]int) []string {
+	over := make(map[string]string, len(caller)+len(svc.Env)+1)
+	for k, v := range caller {
+		over[k] = v
+	}
+	if port > 0 {
+		over["PORT"] = strconv.Itoa(port)
+	}
+	for k, v := range svc.Env {
+		over[k] = groups.Expand(v, svc.Name, ports)
+	}
+	return layer(os.Environ(), over)
+}
+
+// layer returns base with every key in over replaced or added.
+func layer(base []string, over map[string]string) []string {
+	out := make([]string, 0, len(base)+len(over))
+	for _, kv := range base {
+		if key, _, ok := strings.Cut(kv, "="); ok {
+			if _, replaced := over[key]; replaced {
+				continue
+			}
+		}
+		out = append(out, kv)
+	}
+	keys := make([]string, 0, len(over))
+	for k := range over {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		out = append(out, k+"="+over[k])
+	}
+	return out
+}
+
+// addressBook is the port every service of one file runs on, worked out once
+// per groups.start and only for the services this start needs: the ones it
+// spawns and the ones their cmd and env refer to. It is what ${port} and
+// ${<service>.port} expand to, what PORT is set to, and what a dependent waits
+// for.
+type addressBook struct {
+	rt    *daemon.Runtime
+	cfg   *groups.Config
+	group string
+	live  map[string]int
+	ports map[string]int
+	errs  map[string]error
+}
+
+func newAddressBook(rt *daemon.Runtime, cfg *groups.Config, group string) *addressBook {
+	b := &addressBook{
+		rt: rt, cfg: cfg, group: group,
+		live: map[string]int{}, ports: map[string]int{}, errs: map[string]error{},
+	}
+	// A service that is already up keeps the port it is on: the run registry
+	// knows the port sonar started it on, and the group row knows where
+	// anything else is listening.
+	for _, rec := range runsreg.Default.List() {
+		if rec.Group == group && rec.PortHint > 0 {
+			b.live[rec.Name] = rec.PortHint
+		}
+	}
+	for _, g := range snapshot(rt).Groups {
+		if g.Name != group {
+			continue
+		}
+		for _, row := range g.Services {
+			if _, known := b.live[row.Name]; !known && row.Running && row.PortActual != nil {
+				b.live[row.Name] = *row.PortActual
+			}
+		}
+	}
+	return b
+}
+
+// port is the port a service runs on, or 0 for one that declares none. A fixed
+// port is itself. A `port: auto` service that is already up keeps its port;
+// one that is not gets its claim.
+func (b *addressBook) port(name string) (int, error) {
+	if port, ok := b.ports[name]; ok {
+		return port, nil
+	}
+	if err, ok := b.errs[name]; ok {
+		return 0, err
+	}
+	svc, ok := b.cfg.ServiceNamed(name)
+	var (
+		port int
+		err  error
+	)
+	switch {
+	case !ok || !svc.HasPort():
+	case svc.Port != 0:
+		port = svc.Port
+	case b.live[name] != 0:
+		port = b.live[name]
+	default:
+		port, err = daemon.AcquireServicePort(b.rt, b.cfg.Dir, name)
+	}
+	if err != nil {
+		b.errs[name] = err
+		return 0, err
+	}
+	b.ports[name] = port
+	return port, nil
+}
+
+// forService resolves the ports a service's cmd and env need: its own, and
+// every service they refer to.
+func (b *addressBook) forService(svc groups.Service) (map[string]int, error) {
+	names := groups.Refs(svc.Cmd, svc.Name)
+	for _, v := range svc.Env {
+		names = append(names, groups.Refs(v, svc.Name)...)
+	}
+	if svc.HasPort() {
+		names = append(names, svc.Name)
+	}
+	out := make(map[string]int, len(names))
+	for _, name := range names {
+		port, err := b.port(name)
+		if err != nil {
+			return nil, fmt.Errorf("no port for %s: %s", name, detail(err))
+		}
+		out[name] = port
+	}
+	return out, nil
 }
 
 // alreadyRunning reports whether a service is up, and why we think so.
@@ -178,13 +328,21 @@ func alreadyRunning(rt *daemon.Runtime, group string, svc groups.Service) (strin
 // DependencyTimeout. Waiting on the daemon's own state rather than on a socket
 // dial is deliberate: the thing that decides a service is up has to be the
 // thing every client reads.
-func waitFor(ctx context.Context, rt *daemon.Runtime, group string, deps []groups.Service) error {
+func waitFor(ctx context.Context, rt *daemon.Runtime, group string, deps []groups.Service, book *addressBook) error {
 	if len(deps) == 0 {
 		return nil
 	}
+	want := make(map[string]int, len(deps))
+	for _, dep := range deps {
+		port, err := book.port(dep.Name)
+		if err != nil {
+			return fmt.Errorf("%s has no port to wait for: %s", dep.Name, detail(err))
+		}
+		want[dep.Name] = port
+	}
 	deadline := time.Now().Add(dependencyTimeout)
 	for {
-		missing := pending(rt, group, deps)
+		missing := pending(rt, group, deps, want)
 		if len(missing) == 0 {
 			return nil
 		}
@@ -201,37 +359,42 @@ func waitFor(ctx context.Context, rt *daemon.Runtime, group string, deps []group
 }
 
 // pending lists the dependencies that are not listening yet.
-func pending(rt *daemon.Runtime, group string, deps []groups.Service) []string {
+func pending(rt *daemon.Runtime, group string, deps []groups.Service, want map[string]int) []string {
 	snap := snapshot(rt)
 	var missing []string
 	for _, dep := range deps {
-		if !listening(snap, group, dep) {
-			missing = append(missing, fmt.Sprintf("%s on port %d", dep.Name, dep.Port))
+		if !listening(snap, group, dep, want[dep.Name]) {
+			missing = append(missing, fmt.Sprintf("%s on port %d", dep.Name, want[dep.Name]))
 		}
 	}
 	return missing
 }
 
-// listening reports whether a dependency's declared port has a listener. The
-// group row is consulted first, because it knows a service may have bound a
-// different port than the one it declared; the raw port list is the fallback
-// for a dependency the resolver has not joined yet.
-func listening(snap state.Snapshot, group string, dep groups.Service) bool {
+// listening reports whether a dependency is up on port. The group row is
+// consulted first, because it knows a service may have bound a different port
+// than the one it declared. For a fixed port the row is the answer; for an
+// assigned one the raw port list is asked too, because the scanner may not
+// have joined the listener to the service yet. The raw list is also the
+// fallback for a dependency the resolver has no row for.
+func listening(snap state.Snapshot, group string, dep groups.Service, port int) bool {
 	for _, g := range snap.Groups {
 		if g.Name != group {
 			continue
 		}
 		for _, row := range g.Services {
-			if row.Name == dep.Name {
+			if row.Name != dep.Name {
+				continue
+			}
+			if row.Running || !dep.PortAuto {
 				return row.Running
 			}
 		}
 	}
-	if dep.Port == 0 {
+	if port == 0 {
 		return true
 	}
 	for _, p := range snap.Ports {
-		if p.Port == dep.Port {
+		if p.Port == port {
 			return true
 		}
 	}

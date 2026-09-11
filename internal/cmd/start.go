@@ -153,6 +153,7 @@ func startDetached(cmd *cobra.Command, argv []string, cwd string, res spawn.Reso
 		params := rpc.RunsSpawnParams{
 			Argv:  argv,
 			Cwd:   cwd,
+			Env:   callerEnv(),
 			Group: &res.Group,
 			Name:  &res.Name,
 			// The CLI is the user: it may start commands anywhere.
@@ -192,6 +193,20 @@ func startDetached(cmd *cobra.Command, argv []string, cwd string, res spawn.Reso
 	registerRun(h)
 	printStarted(res, h.PID, h.LogPath)
 	return nil
+}
+
+// callerEnv is this process's environment as the map runs.spawn and
+// groups.start take, so what the daemon starts runs with the user's PATH,
+// toolchain and virtualenv rather than the daemon's own.
+func callerEnv() map[string]string {
+	out := map[string]string{}
+	for _, kv := range os.Environ() {
+		// Windows keeps per-drive entries like "=C:=C:\" with an empty key.
+		if k, v, ok := strings.Cut(kv, "="); ok && k != "" {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 func printStarted(res spawn.Resolution, pid int, logPath string) {

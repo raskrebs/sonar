@@ -13,7 +13,20 @@ import (
 // just stopped.
 //
 // index may be nil, in which case groups carry no services and no config path.
-func Groups(pp []state.Port, index *Index) []state.Group {
+func Groups(pp []state.Port, index *Index) []state.Group { return GroupsWith(pp, index, nil) }
+
+// PortHints is the optional half of Registry that knows the port sonar started
+// each service to bind — for a `port: auto` service, the one it assigned. The
+// builder joins a service to that port even when the listener is not in the
+// run's process tree: a `docker compose up` service is served by Docker, not
+// by the command sonar started.
+type PortHints interface {
+	PortHint(group, service string) (int, bool)
+}
+
+// GroupsWith is Groups with the ports sonar assigned the services it started.
+// hints may be nil.
+func GroupsWith(pp []state.Port, index *Index, hints PortHints) []state.Group {
 	if index == nil {
 		index = NewIndex()
 	}
@@ -59,7 +72,7 @@ func Groups(pp []state.Port, index *Index) []state.Group {
 		if rank(state.SourceFile) > rank(g.Source) {
 			g.Source = state.SourceFile
 		}
-		g.Services = services(cfg, members[name])
+		g.Services = services(cfg, name, members[name], hints)
 	}
 
 	out := make([]state.Group, 0, len(byName))
@@ -113,6 +126,7 @@ func ServiceRow(s Service) state.Service {
 		port := s.Port
 		svc.Port = &port
 	}
+	svc.PortAuto = s.PortAuto
 	svc.Health = optional(s.Health)
 	svc.Description = optional(s.Description)
 	svc.Icon = optional(s.Icon)
@@ -139,14 +153,19 @@ func optional(s string) *string {
 }
 
 // services joins a config's declared services against the ports actually
-// listening in that group: by declared port first, then by the name the
-// scanner shows for the port.
-func services(cfg *Config, member []state.Port) []state.Service {
+// listening in that group: by declared port first, then by the port sonar
+// assigned a `port: auto` service, then by the name the scanner shows for the
+// port.
+func services(cfg *Config, group string, member []state.Port, hints PortHints) []state.Service {
 	out := make([]state.Service, 0, len(cfg.Services))
 	for _, s := range cfg.Services {
 		svc := ServiceRow(s)
+		assigned := 0
+		if s.PortAuto && hints != nil {
+			assigned, _ = hints.PortHint(group, s.Name)
+		}
 		for _, p := range member {
-			if (s.Port != 0 && p.Port == s.Port) || p.DisplayName == s.Name ||
+			if (s.Port != 0 && p.Port == s.Port) || (assigned != 0 && p.Port == assigned) || p.DisplayName == s.Name ||
 				(p.Run != nil && p.Run.Name == s.Name) {
 				actual := p.Port
 				svc.Running, svc.PortActual = true, &actual

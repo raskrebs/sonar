@@ -74,6 +74,11 @@ func upRun(cmd *cobra.Command, args []string) error {
 // given, the config at or above the working directory otherwise.
 func upParams(args []string) (rpc.GroupsStartParams, error) {
 	params := rpc.GroupsStartParams{HostParams: hostParams(), Only: upOnly}
+	if !onRemoteHost() {
+		// The services run as if started from this shell. A remote host gets
+		// nothing: this machine's PATH means nothing on another one.
+		params.Env = callerEnv()
+	}
 	if len(args) == 1 {
 		name := strings.TrimSpace(args[0])
 		params.Name = &name
@@ -161,8 +166,11 @@ func printStartChunk(c rpc.GroupsStartChunk) {
 		}
 		fmt.Printf("  %s %s  %s\n", display.Dim("-"), display.Bold(c.Service), display.Dim(reason))
 	default:
-		fmt.Printf("  %s %s  %s\n", display.Green("✓"), display.Bold(c.Service),
-			display.Dim(fmt.Sprintf("pid %d  %s", c.PID, shortPath(c.LogPath))))
+		where := fmt.Sprintf("pid %d  %s", c.PID, shortPath(c.LogPath))
+		if c.Port > 0 {
+			where = fmt.Sprintf("port %d  %s", c.Port, where)
+		}
+		fmt.Printf("  %s %s  %s\n", display.Green("✓"), display.Bold(c.Service), display.Dim(where))
 	}
 }
 
