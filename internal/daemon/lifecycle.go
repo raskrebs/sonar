@@ -49,6 +49,8 @@ type RunRegistry interface {
 	Run(p state.Port) (run state.Run, ok bool)
 	// Prune drops runs whose process is gone.
 	Prune()
+	// GroupPIDs lists the live runs recorded under a group.
+	GroupPIDs(group string) []int
 }
 
 // noRuns is the stand-in used before a registry is installed, so callers never
@@ -57,6 +59,7 @@ type noRuns struct{}
 
 func (noRuns) Run(state.Port) (state.Run, bool) { return state.Run{}, false }
 func (noRuns) Prune()                           {}
+func (noRuns) GroupPIDs(string) []int           { return nil }
 
 // SetRuns installs the run registry. Called once, from an OnStart hook.
 func (r *Runtime) SetRuns(reg RunRegistry) {

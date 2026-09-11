@@ -46,10 +46,15 @@ var (
 const registerTimeout = 5 * time.Second
 
 var startCmd = &cobra.Command{
-	Use:   "start [--group <name>] [--name <name>] [--port <port>] [--detach] -- <command> [args...]",
-	Short: "Start a command as a named service in a group",
-	Long: "Start <command> and record it so sonar can attribute every port it (or\n" +
-		"anything it spawns) opens to a group and a service name.\n\n" +
+	Use:   "start [-d] [<dir>] [<service>...] | start [flags] -- <command> [args...]",
+	Short: "Start a project from its sonar.yaml, or one command as a named service",
+	Long: "With no command, start the project described by the nearest sonar.yaml —\n" +
+		"or the one in or above <dir> — in depends_on order. Name services to\n" +
+		"start only those. In the foreground sonar follows their logs with the\n" +
+		"service name in front of every line, and Ctrl+C stops the services it\n" +
+		"started. -d starts them in the background instead, like `sonar up`.\n\n" +
+		"After --, start <command> and record it so sonar can attribute every\n" +
+		"port it (or anything it spawns) opens to a group and a service name.\n\n" +
 		"The group is --group, else the nearest sonar.yaml, else the git\n" +
 		"checkout the command runs in, else the directory name. The name is\n" +
 		"--name, else the matching sonar.yaml service, else inferred from the\n" +
@@ -67,9 +72,9 @@ func init() {
 	startCmd.Flags().StringVar(&startGroup, "group", "", "Group to attribute this run to (default: sonar.yaml, git root, or directory name)")
 	startCmd.Flags().StringVar(&startName, "name", "", "Service name for this run (default: inferred from the command)")
 	startCmd.Flags().IntVar(&startPort, "port", 0, "Port this command is expected to bind; the run shows as starting until it does")
-	startCmd.Flags().BoolVar(&startDetach, "detach", false, "Run in the background, logging to ~/.config/sonar/logs/<group>/<name>.log")
+	startCmd.Flags().BoolVarP(&startDetach, "detach", "d", false, "Run in the background, logging to ~/.config/sonar/logs/<group>/")
 	startCmd.Flags().BoolVar(&startList, "list", false, "List the runs sonar started and exit")
-	startCmd.Flags().BoolVar(&startJSON, "json", false, "Output as JSON (with --list)")
+	startCmd.Flags().BoolVar(&startJSON, "json", false, "Output as JSON (with --list, or with -d for a project)")
 	rootCmd.AddCommand(startCmd)
 }
 
@@ -77,16 +82,18 @@ func startRun(cmd *cobra.Command, args []string) error {
 	if startList {
 		return listRuns(cmd.Context())
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("resolving the working directory: %w", err)
+	}
+	if handled, err := startProjectIfAsked(cmd, cwd, args); handled {
+		return err
+	}
 	if len(args) == 0 {
 		return errors.New("no command given; usage: sonar start [flags] -- <command> [args...]")
 	}
 	if startPort < 0 || startPort > 65535 {
 		return fmt.Errorf("--port %d is not a port number", startPort)
-	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("resolving the working directory: %w", err)
 	}
 	res := spawn.Resolve(cwd, args, startGroup, startName)
 	// The agent session is detected here, in the process the agent actually

@@ -215,6 +215,19 @@ func (r *Registry) PortHint(group, service string) (int, bool) {
 	return 0, false
 }
 
+// GroupPIDs lists the live runs recorded under a group, so `sonar down` can
+// stop the ones that hold no port — a worker, or a service still starting —
+// which a kill by port never reaches.
+func (r *Registry) GroupPIDs(group string) []int {
+	var out []int
+	for _, rec := range r.List() {
+		if rec.Group == group {
+			out = append(out, rec.PID)
+		}
+	}
+	return out
+}
+
 // Session implements groups.SessionRegistry: it reports the agent session that
 // started the run owning this port, using the same PPID walk the run
 // attribution uses, so a port and its run can never disagree about who started

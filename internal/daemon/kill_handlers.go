@@ -58,41 +58,6 @@ func handlePortsKill(ctx context.Context, req *Request) (any, error) {
 	return killEnvelope(rows), nil
 }
 
-func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
-	var p rpc.GroupsKillParams
-	if err := req.Bind(&p); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(p.Name) == "" {
-		return nil, rpc.NewError(rpc.CodeInvalidParams, "name is required",
-			`send {"name": "my-app"}`)
-	}
-
-	snap, err := killSnapshot(req)
-	if err != nil {
-		return nil, err
-	}
-
-	targets := groupTargets(snap, p.Name)
-	if len(targets) == 0 {
-		return nil, killRPCError(&killer.CodedError{
-			Code:   killer.CodeNotFound,
-			Detail: "no listening port belongs to group " + p.Name,
-			Hint:   "run `sonar groups` to see what is grouped right now",
-		})
-	}
-
-	opts := killer.Options{
-		Force:  p.Force,
-		Grace:  time.Duration(p.GraceMs) * time.Millisecond,
-		DryRun: p.DryRun,
-		Ports:  killerRows(snap),
-	}
-	rows := killer.KillPorts(ctx, targets, opts)
-	afterKill(req, opts.DryRun)
-	return killEnvelope(rows), nil
-}
-
 // afterKill rescans and publishes, so the ports that just went away are gone
 // from the very next read and their port_down rows reach the history ring even
 // when nobody is subscribed. Without it the caller's own `sonar list` would

@@ -111,6 +111,7 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			continue
 		}
 
+		offset := logSize(spawn.LogPath(group, svc.Name))
 		h, err := start(ctx, rt, cfg, group, svc, book, p)
 		if err != nil {
 			rt.Logger.Warn("starting a service", "group", group, "service", svc.Name, "error", err)
@@ -118,7 +119,10 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			end.Errors = append(end.Errors, svc.Name)
 			continue
 		}
-		_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, PID: h.PID, Port: h.PortHint, LogPath: h.LogPath})
+		_ = s.Send(rpc.GroupsStartChunk{
+			Service: svc.Name, PID: h.PID, Port: h.PortHint,
+			LogPath: h.LogPath, LogOffset: offset,
+		})
 		end.Started = append(end.Started, svc.Name)
 	}
 	return end
@@ -157,6 +161,18 @@ func start(ctx context.Context, rt *daemon.Runtime, cfg *groups.Config, group st
 		PortHint: port,
 		LogPath:  spawn.LogPath(group, svc.Name),
 	})
+}
+
+// logSize is how far a service's log file already reaches: where this run's
+// output will begin, since the file is appended to across runs. A file that is
+// rotated when the service opens it starts over at zero, which a follower
+// notices by the file being shorter than the offset.
+func logSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 // serviceEnv is the environment a service starts in, each layer winning over

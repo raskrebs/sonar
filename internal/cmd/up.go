@@ -67,7 +67,7 @@ func upRun(cmd *cobra.Command, args []string) error {
 	}
 	defer stream.Close()
 
-	return consumeStart(stream)
+	return consumeStart(stream, upJSON)
 }
 
 // upParams turns the command line into groups.start params: a name when one was
@@ -116,7 +116,7 @@ func upParams(args []string) (rpc.GroupsStartParams, error) {
 // consumeStart prints one line per service as the daemon reports it, then the
 // summary. It exits non-zero when any service failed to start (spec, "Error
 // handling": a partial failure is still a failure).
-func consumeStart(stream *client.Stream) error {
+func consumeStart(stream *client.Stream, asJSON bool) error {
 	var chunks []rpc.GroupsStartChunk
 
 	for chunk := range stream.Chunks() {
@@ -125,7 +125,7 @@ func consumeStart(stream *client.Stream) error {
 			continue
 		}
 		chunks = append(chunks, c)
-		if !upJSON {
+		if !asJSON {
 			printStartChunk(c)
 		}
 	}
@@ -139,7 +139,7 @@ func consumeStart(stream *client.Stream) error {
 		return err
 	}
 
-	if upJSON {
+	if asJSON {
 		if err := writeJSON(struct {
 			Services []rpc.GroupsStartChunk `json:"services"`
 			rpc.GroupsStartEnd

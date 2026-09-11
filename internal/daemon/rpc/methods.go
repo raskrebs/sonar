@@ -64,6 +64,9 @@ type MutationResult struct {
 type KillEnvelope struct {
 	MutationResult
 	Results []state.KillResult `json:"results"`
+	// Released is how many claimed ports a `groups.kill` with release gave
+	// back (`sonar down`). Zero for every other kill.
+	Released int `json:"released,omitempty"`
 }
 
 // Empty is the params or result of a method that takes or returns nothing.
@@ -357,10 +360,19 @@ type GroupsInspectResult struct {
 
 type GroupsKillParams struct {
 	HostParams
-	Name    string `json:"name"`
-	Force   bool   `json:"force,omitempty"`
-	GraceMs int    `json:"grace_ms,omitempty"`
-	DryRun  bool   `json:"dry_run,omitempty"`
+	Name string `json:"name"`
+	// ConfigPath names the group by its sonar.yaml instead of by name, for a
+	// caller that knows the file but not the name the daemon publishes its
+	// group under (`<project>@<worktree>` in a linked worktree, an alias).
+	ConfigPath *string `json:"config_path,omitempty"`
+	Force      bool    `json:"force,omitempty"`
+	GraceMs    int     `json:"grace_ms,omitempty"`
+	DryRun     bool    `json:"dry_run,omitempty"`
+	// Release is `sonar down`: besides the group's listening ports it stops
+	// every run sonar started in the group, port or not, and releases the
+	// claims the group's `port: auto` services hold. A group with a config
+	// and nothing running is not an error then: its claims are still released.
+	Release bool `json:"release,omitempty"`
 }
 
 type GroupsStartParams struct {
@@ -391,9 +403,13 @@ type GroupsStartChunk struct {
 	// or the one assigned for `port: auto`. Zero for a service with none.
 	Port    int    `json:"port,omitempty"`
 	LogPath string `json:"log_path,omitempty"`
-	Skipped bool   `json:"skipped,omitempty"`
-	Reason  string `json:"reason,omitempty"`
-	Error   string `json:"error,omitempty"`
+	// LogOffset is how long log_path already was before this start. The file
+	// is appended to across runs, so a client following it starts here to
+	// show this run and not the ones before.
+	LogOffset int64  `json:"log_offset,omitempty"`
+	Skipped   bool   `json:"skipped,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 type GroupsStartEnd struct {

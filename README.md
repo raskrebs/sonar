@@ -92,18 +92,48 @@ sonar completion fish | source                 # fish
 
 ## Sixty seconds
 
-Prefix the commands in your `dev.sh` with `sonar start`:
+Describe how your project runs in a `sonar.yaml` at the repository root, in
+place of a `dev.sh`:
 
-```sh
-#!/usr/bin/env bash
-sonar start --name db       --port 5432 -- docker compose up db &
-sonar start --name api      --port 8000 -- uv run uvicorn app:app &
-sonar start --name frontend --port 5173 -- npm run dev &
-wait
+```yaml
+name: my-app
+services:
+  - name: db
+    cmd: docker compose up db
+    port: 5432
+  - name: api
+    cmd: uv run uvicorn app:app --port ${port}
+    port: auto
+    depends_on: [db]
+  - name: frontend
+    cmd: npm run dev -- --port ${port} --strictPort
+    port: auto
+    depends_on: [api]
+    env:
+      VITE_API_URL: ${api.url}
 ```
 
-The group name comes from the repository, so nothing else needs configuring.
-In another terminal:
+Then start it:
+
+```sh
+sonar start
+```
+
+```
+  ✓ db        port 5432  pid 41022  ~/.config/sonar/logs/my-app/db.log
+  ✓ api       port 21408  pid 41040  ~/.config/sonar/logs/my-app/api.log
+  ✓ frontend  port 21409  pid 41077  ~/.config/sonar/logs/my-app/frontend.log
+
+3 started
+following the logs; Ctrl+C stops the 3 services started here
+api      | INFO:     Uvicorn running on http://127.0.0.1:21408
+frontend | VITE v5.4  ready in 312 ms
+```
+
+Sonar picks a free port for every `port: auto` service and tells each service
+where the others are, so a second worktree runs next to the first without a
+single port clashing. `sonar start -d` does the same in the background, and
+`sonar down` stops it and gives the ports back. In another terminal:
 
 ```sh
 sonar list --tree
@@ -111,16 +141,13 @@ sonar list --tree
 
 ```
 my-app  (3 ports, running)                        ~/code/my-app
-├─ 5432  db          postgres:17                  http://localhost:5432
-├─ 5173  frontend    vite (v5.4)                  http://localhost:5173
-└─ 8000  api         uvicorn app:app              http://localhost:8000
+├─ 5432   db          postgres:17                 http://localhost:5432
+├─ 21408  api         uvicorn app:app             http://localhost:21408
+└─ 21409  frontend    vite (v5.4)                 http://localhost:21409
 ```
 
-And when you are done, stop the whole project — servers, watchers and workers:
-
-```sh
-sonar kill -g my-app
-```
+No `sonar.yaml`? `sonar start -- npm run dev` runs one command as a named
+service, and `sonar list` and `sonar kill` work on anything that is listening.
 
 Examples below marked `# check` are executed against a fresh build by
 `scripts/readme-check.sh` on every CI run.
@@ -162,7 +189,22 @@ hidden unless you pass `-a`.
 
 ### `sonar start`
 
-Run a command as a named service in a group:
+Start a project from its `sonar.yaml`:
+
+```sh
+sonar start                    # every service in the nearest sonar.yaml
+sonar start api frontend       # only these (they still wait for their dependencies)
+sonar start ../other-project   # the sonar.yaml in or above another directory
+sonar start -d                 # in the background, like `sonar up`
+```
+
+In the foreground, sonar starts the services through the daemon, follows their
+logs with the service name in front of every line, and when you press Ctrl+C
+stops the services it started. A service that was already running is left
+alone, and sonar returns by itself once every service it started has exited.
+
+Arguments before `--` name a directory or services; everything after `--` is a
+command. Or run one command as a named service in a group:
 
 ```sh
 sonar start -- npm run dev
@@ -230,7 +272,7 @@ ports: [9229]        # ports that belong to this project without a service
 ```
 
 - `name` — the group name. No slashes, no whitespace.
-- `cmd`, `cwd`, `port` — how `sonar up` starts the service. `cwd` is relative to
+- `cmd`, `cwd`, `port` — how `sonar start` starts the service. `cwd` is relative to
   the file and may not escape its directory.
 - `health` — an HTTP path the daemon polls while the service is up, so a
   service can be *running* but not yet *healthy*. It reports `ok`, `fail` or
@@ -259,7 +301,7 @@ services:
       VITE_API_URL: ${api.url}
 ```
 
-`sonar up` claims a free port for every `port: auto` service it starts: the
+`sonar start` claims a free port for every `port: auto` service it starts: the
 same one each time in the same checkout, and a different one in every other
 checkout, so a worktree never collides with the main one. The service gets it
 as `PORT`, `SONAR_PORT` and `${port}`, and it has to use it — read `PORT`, or
@@ -296,7 +338,9 @@ sonar up --only api,frontend
 sonar up --json
 ```
 
-Starts every service the group's `sonar.yaml` declares, in `depends_on` order:
+`sonar up` is `sonar start -d`, which can also name a group from anywhere and
+start it on another host. It starts every service the group's `sonar.yaml`
+declares, in `depends_on` order:
 a service waits for the ports its dependencies declare before it is started, and
 one that is already listening is skipped. Each runs detached in its own process
 group, with its output in `~/.config/sonar/logs/<group>/<service>.log`, and with
@@ -312,9 +356,20 @@ with a port.
 ```
 
 A service that fails to start is reported on its own line and makes the command
-exit non-zero, whatever else came up. Stop them all again with
-`sonar kill -g my-app`. `sonar up` needs the daemon and starts it if it is not
-already running.
+exit non-zero, whatever else came up. Stop them all again with `sonar down`.
+`sonar up` needs the daemon and starts it if it is not already running.
+
+### `sonar down`
+
+```sh
+sonar down            # the project in the nearest sonar.yaml
+sonar down my-app     # a group by name
+```
+
+Stops every service of the project — every port it listens on, and every
+service sonar started for it that holds no port, like a worker — and releases
+the ports sonar claimed for its `port: auto` services. `sonar kill -g my-app`
+stops the ports and releases nothing.
 
 ### `sonar groups` and `sonar init`
 
@@ -889,7 +944,7 @@ silences the notices, and `--json` output never carries them.
 | `sonar runs` | `sonar start --list` |
 | `sonar list --tag X` | `sonar list --group X` |
 | `sonar kill-all --filter docker` | `sonar kill --all --filter docker` |
-| `sonar down X` | `sonar kill -g X` |
+| `sonar down X` (a profile) | `sonar kill -g X`; `sonar down` now stops a `sonar.yaml` project |
 | `sonar profile create X` | `sonar init` |
 | `sonar profile show X` | `sonar groups X` |
 | `sonar up X` (checked a profile) | `sonar up X` now *starts* the group |

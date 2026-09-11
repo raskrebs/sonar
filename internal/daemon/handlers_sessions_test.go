@@ -32,6 +32,16 @@ func (f *fakeRuns) Run(p state.Port) (state.Run, bool) {
 
 func (f *fakeRuns) Prune() {}
 
+func (f *fakeRuns) GroupPIDs(group string) []int {
+	var out []int
+	for _, l := range f.live {
+		if l.Group == group {
+			out = append(out, l.PID)
+		}
+	}
+	return out
+}
+
 func (f *fakeRuns) Session(p state.Port) (state.Session, bool) {
 	for _, l := range f.live {
 		if l.PID == p.PID {
