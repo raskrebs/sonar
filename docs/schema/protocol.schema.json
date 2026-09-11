@@ -1012,6 +1012,15 @@
         "name": {
           "type": "string"
         },
+        "repo": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
         "source": {
           "type": "string",
           "enum": [
@@ -1061,6 +1070,9 @@
       "required": [
         "host",
         "name",
+        "repo",
+        "worktree",
+        "branch",
         "source",
         "root_dir",
         "config_path",
@@ -1361,6 +1373,15 @@
         "name": {
           "type": "string"
         },
+        "repo": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
         "source": {
           "type": "string",
           "enum": [
@@ -1416,6 +1437,9 @@
       "required": [
         "host",
         "name",
+        "repo",
+        "worktree",
+        "branch",
         "source",
         "root_dir",
         "config_path",

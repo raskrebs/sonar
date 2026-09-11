@@ -26,6 +26,7 @@ func diff(prev, next Snapshot, withStats bool) Delta {
 			func(g Group) string { return g.Key() },
 			func(a, b Group) bool {
 				return a.Status == b.Status &&
+					a.Repo == b.Repo && a.Worktree == b.Worktree && a.Branch == b.Branch &&
 					reflect.DeepEqual(a.Members, b.Members) &&
 					reflect.DeepEqual(a.Services, b.Services)
 			}),

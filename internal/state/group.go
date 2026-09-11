@@ -24,8 +24,19 @@ type Service struct {
 // numbers; clients join them against the ports list.
 type Group struct {
 	// Host names the machine this group lives on (see Port.Host).
-	Host       string      `json:"host"`
-	Name       string      `json:"name"`
+	Host string `json:"host"`
+	Name string `json:"name"`
+	// Repo is the project every checkout of one repository shares: the main
+	// checkout's group name. A group that is not a git checkout's is its own
+	// project, so Repo equals Name.
+	Repo string `json:"repo"`
+	// Worktree is a linked worktree's name, the `<worktree>` half of a
+	// `<repo>@<worktree>` group. It is empty for a main checkout and for a
+	// group that is not a checkout.
+	Worktree string `json:"worktree"`
+	// Branch is the branch checked out in the group's checkout, read from its
+	// HEAD. It is empty when HEAD is detached or cannot be read.
+	Branch     string      `json:"branch"`
 	Source     GroupSource `json:"source" jsonschema:"enum=auto,enum=file,enum=manual,enum=start"`
 	RootDir    *string     `json:"root_dir" jsonschema:"nullable"`
 	ConfigPath *string     `json:"config_path" jsonschema:"nullable"`

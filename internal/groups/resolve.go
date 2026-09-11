@@ -95,10 +95,17 @@ func MatchKeys(p state.Port) []string {
 //  4. compose — the Compose project, unless its working directory is inside a
 //     git checkout, in which case the container merges into that checkout's
 //     group so a Compose db and a native api are one group
-//  5. gitroot — the checkout containing the process cwd, named `<repo>` or
-//     `<repo>@<worktree>`; a `.sonar.yaml` at that root renames the group and
-//     makes the source `file`
+//  5. gitroot — the checkout containing the process cwd, named `<project>` or
+//     `<project>@<worktree>`, where the project name comes from the main
+//     checkout only: an alias from `groups.rename`, else the `name:` of its
+//     `.sonar.yaml`, else its directory name. A `.sonar.yaml` at the
+//     checkout's root makes the source `file`; a linked worktree's own copy
+//     supplies services but never the name (step 5A.6)
 //  6. none — group stays null
+//
+// A run's group is kept, except that a run recorded under the project's own
+// name is moved to its checkout's current group name (see runGroup), and a
+// config never claims a port across a linked worktree's boundary.
 //
 // pins, runs and index may all be nil.
 func Resolve(pp []state.Port, pins Pins, runs Registry, index *Index) []state.Port {
@@ -114,9 +121,9 @@ func Resolve(pp []state.Port, pins Pins, runs Registry, index *Index) []state.Po
 }
 
 func resolveOne(p *state.Port, pins Pins, runs Registry, index *Index) {
-	root, worktree := projectRoot(p, index)
-	if root != "" {
-		r := root
+	co, inRepo := projectCheckout(p, index)
+	if inRepo {
+		r := co.Root
 		p.ProjectRoot = &r
 	}
 	p.Group, p.GroupSource = nil, nil
@@ -129,20 +136,30 @@ func resolveOne(p *state.Port, pins Pins, runs Registry, index *Index) {
 	}
 	if runs != nil {
 		if run, ok := runs.Run(*p); ok && run.Group != "" {
-			assign(p, run.Group, state.SourceStart)
+			group := run.Group
+			if inRepo {
+				group = index.runGroup(group, co)
+			}
+			assign(p, group, state.SourceStart)
 			return
 		}
 	}
-	if cfg, _, ok := index.MatchPort(*p); ok {
-		assign(p, cfg.Name, state.SourceFile)
+	// The deepest config claiming the port wins. If that one lies outside the
+	// linked worktree the port runs in, none inside it claims the port — they
+	// would be deeper — so the checkout's own group takes it below.
+	if cfg, _, ok := index.MatchPort(*p); ok && (!inRepo || index.within(cfg, co)) {
+		assign(p, index.GroupOf(cfg), state.SourceFile)
 		return
 	}
-	if root != "" {
-		if cfg := index.Nearest(root); cfg != nil {
-			assign(p, cfg.Name, state.SourceFile)
-			return
+	if inRepo {
+		// Name first: naming probes the main checkout, which is where a
+		// main-checkout port's own config may still be waiting to be read.
+		name := index.CheckoutName(co)
+		source := state.SourceAuto
+		if index.checkoutConfig(co) != nil {
+			source = state.SourceFile
 		}
-		assign(p, GroupName(root, worktree), state.SourceAuto)
+		assign(p, name, source)
 		return
 	}
 	if p.Docker != nil && p.Docker.ComposeProject != "" {
@@ -150,23 +167,23 @@ func resolveOne(p *state.Port, pins Pins, runs Registry, index *Index) {
 	}
 }
 
-// projectRoot is the checkout a port belongs to: the git root above the
+// projectCheckout is the checkout a port belongs to: the one containing the
 // process cwd, or — for a Compose container, which has no cwd of its own — the
-// git root above the project's working directory.
-func projectRoot(p *state.Port, index *Index) (root, worktree string) {
+// one containing the project's working directory.
+func projectCheckout(p *state.Port, index *Index) (Checkout, bool) {
 	if p.Cwd != "" {
-		if root, worktree, ok := Find(p.Cwd); ok {
-			return root, worktree
+		if co, ok := Locate(p.Cwd); ok {
+			return co, true
 		}
 	}
 	if p.Docker != nil && p.Docker.ComposeProject != "" {
 		if dir := index.ComposeDir(p.Docker.ComposeProject); dir != "" {
-			if root, worktree, ok := Find(dir); ok {
-				return root, worktree
+			if co, ok := Locate(dir); ok {
+				return co, true
 			}
 		}
 	}
-	return "", ""
+	return Checkout{}, false
 }
 
 func assign(p *state.Port, name string, source state.GroupSource) {

@@ -64,12 +64,15 @@ func (x *Index) Known() []string {
 	return out
 }
 
-// Named returns the valid config that names this group. The deepest directory
-// wins, matching Configs' ordering, so a nested project shadows the repository
-// it sits in.
+// Named returns the valid config whose services are published as this group
+// (see GroupOf). The deepest directory wins, matching Configs' ordering, so a
+// nested project shadows the repository it sits in. Matching the group rather
+// than the file's `name:` is what keeps a linked worktree's copy of a
+// committed file from answering for the main checkout: the copy is
+// `<project>@<worktree>`, and only the main checkout's file is `<project>`.
 func (x *Index) Named(name string) (*Config, bool) {
 	for _, cfg := range x.Configs() {
-		if cfg.Name == name {
+		if x.GroupOf(cfg) == name {
 			return cfg, true
 		}
 	}

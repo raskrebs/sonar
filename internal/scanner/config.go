@@ -36,6 +36,15 @@ func (l *Loop) ConfigNamed(name string) (*groups.Config, bool) {
 	return l.index().Named(name)
 }
 
+// GroupOf returns the group a config's services are published under. For a
+// config at a checkout's root that is the checkout's group, whatever the file's
+// own `name:` says: a linked worktree's copy names `<project>@<worktree>`.
+func (l *Loop) GroupOf(cfg *groups.Config) string {
+	l.attr.mu.Lock()
+	defer l.attr.mu.Unlock()
+	return l.index().GroupOf(cfg)
+}
+
 // ConfigAt returns the config read from this file.
 func (l *Loop) ConfigAt(path string) (*groups.Config, bool) {
 	l.attr.mu.Lock()

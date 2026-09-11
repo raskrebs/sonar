@@ -2,6 +2,7 @@ package groups
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/raskrebs/sonar/internal/state"
 )
@@ -47,24 +48,51 @@ func Groups(pp []state.Port, index *Index) []state.Group {
 	}
 
 	for _, cfg := range index.Configs() {
-		g := order(cfg.Name)
+		// Named the way the resolver names the config's ports, so a stopped
+		// worktree with a copy of the main checkout's file is `<repo>@<wt>`
+		// here too, not a second group with the main checkout's name.
+		name := index.GroupOf(cfg)
+		g := order(name)
 		path, dir := cfg.Path, cfg.Dir
 		g.ConfigPath = &path
 		g.RootDir = &dir
 		if rank(state.SourceFile) > rank(g.Source) {
 			g.Source = state.SourceFile
 		}
-		g.Services = services(cfg, members[cfg.Name])
+		g.Services = services(cfg, members[name])
 	}
 
 	out := make([]state.Group, 0, len(byName))
 	for _, g := range byName {
 		sort.Ints(g.Members)
 		g.Status = status(*g)
+		describeCheckout(g, index)
 		out = append(out, *g)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// describeCheckout fills in which project a group is a checkout of, which
+// linked worktree it is, and the branch checked out there. A group named
+// `<repo>@<worktree>` for the linked worktree it lives in is that worktree of
+// repo; every other group is its own project.
+func describeCheckout(g *state.Group, index *Index) {
+	g.Repo, g.Worktree, g.Branch = g.Name, "", ""
+	if g.RootDir == nil {
+		return
+	}
+	co, ok := Locate(*g.RootDir)
+	if !ok {
+		return
+	}
+	g.Branch = index.Branch(co)
+	if !co.Linked() {
+		return
+	}
+	if repo, found := strings.CutSuffix(g.Name, "@"+co.Worktree); found && repo != "" {
+		g.Repo, g.Worktree = repo, co.Worktree
+	}
 }
 
 // ServiceRow adapts one `.sonar.yaml` service to the published contract row,

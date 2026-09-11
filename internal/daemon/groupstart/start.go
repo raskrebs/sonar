@@ -52,12 +52,16 @@ func handleGroupsStart(ctx context.Context, req *daemon.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The group the services run under is the one the file's ports are
+	// published in: `<project>@<worktree>` for a worktree's copy of a
+	// committed file, never the `name:` the copy carries (step 5A.6).
+	group := req.Runtime.Scanner.GroupOf(cfg)
 	plan, err := groups.Plan(cfg, p.Only)
 	if err != nil {
 		var unknown *groups.UnknownServiceError
 		if errors.As(err, &unknown) {
 			return nil, rpc.NewError(rpc.CodeNotFound, unknown.Error(),
-				"`sonar groups "+cfg.Name+"` lists the services this file declares")
+				"`sonar groups "+group+"` lists the services this file declares")
 		}
 		return nil, rpc.NewError(rpc.CodeInternal, err.Error(), "")
 	}
@@ -70,7 +74,7 @@ func handleGroupsStart(ctx context.Context, req *daemon.Request) (any, error) {
 	rt := req.Runtime
 	initial := rpc.GroupsStartResult{MutationResult: rpc.MutationResult{OK: true, Affected: []string{}}}
 	return daemon.StartStream(ctx, req, initial, func(ctx context.Context, s *daemon.Stream) (any, error) {
-		return run(ctx, rt, s, cfg, plan, p.AllowOutsideHome), nil
+		return run(ctx, rt, s, cfg, group, plan, p.AllowOutsideHome), nil
 	})
 }
 
@@ -78,7 +82,7 @@ func handleGroupsStart(ctx context.Context, req *daemon.Request) (any, error) {
 // A service that fails never stops the ones after it: the caller asked for the
 // group, and a partial group is more useful than none.
 func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
-	cfg *groups.Config, plan []groups.Step, allowOutsideHome bool) rpc.GroupsStartEnd {
+	cfg *groups.Config, group string, plan []groups.Step, allowOutsideHome bool) rpc.GroupsStartEnd {
 
 	end := rpc.GroupsStartEnd{Started: []string{}, Skipped: []string{}, Errors: []string{}}
 
@@ -88,13 +92,13 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 		}
 		svc := step.Service
 
-		if reason, up := alreadyRunning(rt, cfg.Name, svc); up {
+		if reason, up := alreadyRunning(rt, group, svc); up {
 			_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, Skipped: true, Reason: reason})
 			end.Skipped = append(end.Skipped, svc.Name)
 			continue
 		}
 
-		if err := waitFor(ctx, rt, cfg.Name, step.Waits); err != nil {
+		if err := waitFor(ctx, rt, group, step.Waits); err != nil {
 			if ctx.Err() != nil {
 				return end
 			}
@@ -103,9 +107,9 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			continue
 		}
 
-		h, err := start(ctx, rt, cfg, svc, allowOutsideHome)
+		h, err := start(ctx, rt, cfg, group, svc, allowOutsideHome)
 		if err != nil {
-			rt.Logger.Warn("starting a service", "group", cfg.Name, "service", svc.Name, "error", err)
+			rt.Logger.Warn("starting a service", "group", group, "service", svc.Name, "error", err)
 			_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, Error: detail(err)})
 			end.Errors = append(end.Errors, svc.Name)
 			continue
@@ -118,7 +122,7 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 
 // start spawns one service through the run registry, so the ports it opens are
 // attributed to this group and this service name.
-func start(ctx context.Context, rt *daemon.Runtime, cfg *groups.Config,
+func start(ctx context.Context, rt *daemon.Runtime, cfg *groups.Config, group string,
 	svc groups.Service, allowOutsideHome bool) (*spawn.Handle, error) {
 
 	argv := spawn.SplitCmd(svc.Cmd)
@@ -132,10 +136,10 @@ func start(ctx context.Context, rt *daemon.Runtime, cfg *groups.Config,
 	return runsreg.Spawn(ctx, rt, spawn.Request{
 		Argv:     argv,
 		Cwd:      cwd,
-		Group:    cfg.Name,
+		Group:    group,
 		Name:     svc.Name,
 		PortHint: svc.Port,
-		LogPath:  spawn.LogPath(cfg.Name, svc.Name),
+		LogPath:  spawn.LogPath(group, svc.Name),
 	})
 }
 

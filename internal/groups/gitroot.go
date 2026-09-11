@@ -68,6 +68,16 @@ func GroupName(root, worktree string) string {
 // (`…/.git/modules/<name>`) and anything unparseable yield "", so the caller
 // falls back to the checkout's own base name.
 func worktreeName(root, gitFile string) string {
+	main := worktreeMain(gitdirTarget(root, gitFile))
+	if main == "" {
+		return ""
+	}
+	return filepath.Base(main) + "@" + filepath.Base(root)
+}
+
+// gitdirTarget reads the `gitdir:` line of a `.git` file, made absolute against
+// root and cleaned. It is "" when the file cannot be read or has no such line.
+func gitdirTarget(root, gitFile string) string {
 	data, err := os.ReadFile(gitFile)
 	if err != nil {
 		return ""
@@ -86,9 +96,16 @@ func worktreeName(root, gitFile string) string {
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(root, target)
 	}
-	target = filepath.Clean(target)
+	return filepath.Clean(target)
+}
 
-	// …/<repo>/.git/worktrees/<name>  ->  main repo is <repo>.
+// worktreeMain is the main checkout's root when target is a linked worktree's
+// admin directory, `<main>/.git/worktrees/<name>`. A submodule's
+// (`…/.git/modules/<name>`) and anything else yield "".
+func worktreeMain(target string) string {
+	if target == "" {
+		return ""
+	}
 	worktreesDir := filepath.Dir(target)
 	if filepath.Base(worktreesDir) != "worktrees" {
 		return ""
@@ -97,9 +114,10 @@ func worktreeName(root, gitFile string) string {
 	if filepath.Base(gitDir) != ".git" {
 		return ""
 	}
-	repo := filepath.Base(filepath.Dir(gitDir))
+	main := filepath.Dir(gitDir)
+	repo := filepath.Base(main)
 	if repo == "" || repo == "." || repo == string(filepath.Separator) {
 		return ""
 	}
-	return repo + "@" + filepath.Base(root)
+	return main
 }

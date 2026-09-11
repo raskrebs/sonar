@@ -37,7 +37,9 @@ func Resolve(cwd string, argv []string, groupFlag, nameFlag string) Resolution {
 
 	index := groups.NewIndex()
 	index.Observe(cwd)
-	cfg := index.Nearest(cwd)
+	// NearestFor, not Nearest: a worktree kept inside the main checkout must
+	// not pick up the main checkout's file on the way up.
+	cfg := index.NearestFor(cwd)
 
 	res := Resolution{Group: strings.TrimSpace(groupFlag), Name: strings.TrimSpace(nameFlag)}
 	if cfg != nil {
@@ -45,7 +47,7 @@ func Resolve(cwd string, argv []string, groupFlag, nameFlag string) Resolution {
 	}
 
 	if res.Group == "" {
-		res.Group = inferGroup(cwd, cfg)
+		res.Group = inferGroup(index, cwd, cfg)
 	}
 	if res.Name == "" {
 		if svc, ok := matchService(cfg, cwd, argv); ok {
@@ -58,13 +60,16 @@ func Resolve(cwd string, argv []string, groupFlag, nameFlag string) Resolution {
 }
 
 // inferGroup is the group half of the chain, config first, then the checkout,
-// then the directory the command was started in.
-func inferGroup(cwd string, cfg *groups.Config) string {
+// then the directory the command was started in. Both of the first two are
+// named the way the resolver names them, so a run started in a linked worktree
+// lands in `<project>@<worktree>` even when the worktree carries a copy of the
+// main checkout's `.sonar.yaml`.
+func inferGroup(index *groups.Index, cwd string, cfg *groups.Config) string {
 	if cfg != nil && cfg.Name != "" {
-		return cfg.Name
+		return index.GroupOf(cfg)
 	}
-	if root, worktree, ok := groups.Find(cwd); ok {
-		return groups.GroupName(root, worktree)
+	if co, ok := groups.Locate(cwd); ok {
+		return index.CheckoutName(co)
 	}
 	return filepath.Base(cwd)
 }

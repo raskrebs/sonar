@@ -21,6 +21,8 @@ type Index struct {
 	compose map[string]string  // compose project -> working_dir label
 	probed  map[string]bool    // directories already looked at
 	stamps  map[string]stamp   // config path -> mtime and size when it was read
+	aliases map[string]string  // main checkout root -> project name (groups.rename)
+	heads   map[string]headEntry
 }
 
 // InvalidConfig is one config file that could not be used, reported by
@@ -38,6 +40,8 @@ func NewIndex() *Index {
 		compose: map[string]string{},
 		probed:  map[string]bool{},
 		stamps:  map[string]stamp{},
+		aliases: map[string]string{},
+		heads:   map[string]headEntry{},
 	}
 }
 
@@ -83,7 +87,14 @@ func (x *Index) Observe(dir string) {
 		return
 	}
 	abs := Canonical(dir)
-	root, _, hasRoot := Find(abs)
+	co, hasRoot := Locate(abs)
+	root := co.Root
+	if hasRoot && co.Linked() {
+		// The main checkout names every worktree of it (step 5A.6), so a
+		// worktree coming into view brings the main checkout's config with it
+		// — and with it the main checkout's group, running or not.
+		x.probeDir(co.Main)
+	}
 	cur := abs
 	for i := 0; i < maxWalk; i++ {
 		x.probeDir(cur)

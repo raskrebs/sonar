@@ -141,9 +141,11 @@ func TestResolvePrecedence(t *testing.T) {
 			wantRoot:   "",
 		},
 		{
+			// The project half is the main checkout's name, and the main
+			// checkout's .sonar.yaml names it (step 5A.6).
 			name:       "a worktree is its own group",
 			port:       nativePort(8100, f.worktree),
-			wantGroup:  "sonar@feature-x",
+			wantGroup:  "sonar-cfg@feature-x",
 			wantSource: state.SourceAuto,
 			wantRoot:   f.worktree,
 		},
