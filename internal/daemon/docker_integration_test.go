@@ -155,7 +155,9 @@ func TestAHealthyDockerStillEnrichesAndGroups(t *testing.T) {
 	defer cancel()
 	c := e.connect(ctx)
 
-	startListener(t, listener, e.home, port)
+	// Since 5A.9 only a port Docker's forwarder holds takes container data,
+	// so the listener runs under the forwarder's name.
+	startListener(t, forwarderCopy(t, listener), e.home, port)
 
 	var row *state.Port
 	deadline := time.Now().Add(20 * time.Second)
@@ -187,5 +189,123 @@ func TestAHealthyDockerStillEnrichesAndGroups(t *testing.T) {
 	}
 	if row.Group == nil || *row.Group != "itestproj" {
 		t.Errorf("group = %v, want the compose project itestproj", deref(row.Group))
+	}
+}
+
+// forwarderCopy copies the listener helper under the name of this platform's
+// Docker port forwarder, so the scanner reports it the way it reports a real
+// published container port: "com.docke" through lsof on macOS, "docker-proxy"
+// through ss on Linux.
+func forwarderCopy(t *testing.T, listener string) string {
+	t.Helper()
+	name := "com.docker.backend"
+	if runtime.GOOS == "linux" {
+		name = "docker-proxy"
+	}
+	b, err := os.ReadFile(listener)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(bin, b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// TestAStaleContainerListDoesNotClaimANativePort is step 5A.9's regression
+// test (issue #95). Docker answers once, publishing the port as itest-web-1,
+// then wedges, so the watcher keeps serving that list. A native process then
+// takes the port. The row must not carry the container, and `ports.kill` must
+// signal the process instead of running `docker stop`.
+func TestAStaleContainerListDoesNotClaimANativePort(t *testing.T) {
+	listener, err := buildListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := freePort(t)
+	wedge := filepath.Join(t.TempDir(), "wedged")
+	ps := "itest-web-1\tnginx:itest\t0.0.0.0:" + strconv.Itoa(port) + "->80/tcp\tweb\titestproj\t" + t.TempDir()
+	path, calls := fakeDockerOnPath(t, "case \"$1\" in\nps)\n"+
+		"  if [ -e '"+wedge+"' ]; then exec sleep 60; fi\n"+
+		"  cat <<'EOF'\n"+ps+"\nEOF\n;;\n*) exit 1 ;;\nesac\n")
+
+	e := newEnv(t)
+	e.extra = []string{path}
+	e.serve()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	c := e.connect(ctx)
+
+	snapshot := func() state.Snapshot {
+		t.Helper()
+		var snap state.Snapshot
+		if err := c.Call(ctx, "state.snapshot", rpc.StateSnapshotParams{}, &snap); err != nil {
+			t.Fatalf("state.snapshot: %v", err)
+		}
+		return snap
+	}
+
+	// Let the watcher cache the list: the second `docker ps` only starts
+	// once the first has answered. Snapshots keep the scanner (and so the
+	// watcher) running.
+	deadline := time.Now().Add(20 * time.Second)
+	for dockerCalls(calls, "ps") < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("docker ps ran %d times, want 2 before wedging it", dockerCalls(calls, "ps"))
+		}
+		snapshot()
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	// Docker wedges; from here the cached list can only go stale.
+	if err := os.WriteFile(wedge, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	startListener(t, listener, e.home, port)
+
+	var row *state.Port
+	deadline = time.Now().Add(20 * time.Second)
+	for row == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("port %d never showed up", port)
+		}
+		time.Sleep(250 * time.Millisecond)
+		snap := snapshot()
+		for i := range snap.Ports {
+			if snap.Ports[i].Port == port {
+				row = &snap.Ports[i]
+			}
+		}
+	}
+	t.Logf("row: process=%q type=%s docker=%+v", row.Process, row.Type, row.Docker)
+	if row.Docker != nil || row.Type == state.TypeDocker {
+		t.Errorf("the native listener's row carries the cached container: type=%s docker=%+v", row.Type, row.Docker)
+	}
+
+	begin := time.Now()
+	var killed rpc.KillEnvelope
+	if err := c.Call(ctx, "ports.kill", rpc.PortsKillParams{
+		Targets: []rpc.Selector{{Port: &port}},
+	}, &killed); err != nil {
+		t.Fatalf("ports.kill: %v", err)
+	}
+	t.Logf("ports.kill took %s: %+v", time.Since(begin), killed.Results)
+	if len(killed.Results) == 0 {
+		t.Fatal("ports.kill returned no rows")
+	}
+	if r := killed.Results[0]; !r.OK || r.Method == state.MethodDockerStop {
+		t.Errorf("ports.kill row = %+v, want the listener signalled", r)
+	}
+	if n := dockerCalls(calls, "stop"); n != 0 {
+		t.Errorf("docker stop ran %d times for a port a native process held", n)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for portOpen(port) {
+		if time.Now().After(deadline) {
+			t.Fatalf("port %d is still open after the kill", port)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
