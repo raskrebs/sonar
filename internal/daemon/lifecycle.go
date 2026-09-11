@@ -27,7 +27,7 @@ type Runtime struct {
 	Scanner    *scanner.Loop
 
 	// Store is the daemon's SQLite database: renames, group pins, the port
-	// history ring and the known `.sonar.yaml` roots. Nil when the database
+	// history ring and the known `sonar.yaml` roots. Nil when the database
 	// could not be opened; every user of it must cope with that.
 	Store *store.Store
 	// DB is the raw handle contract §8 promises extension packages. It is the

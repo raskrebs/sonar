@@ -2,7 +2,7 @@
 //
 // A group is a name plus the set of ports currently resolved to it. Groups are
 // never created explicitly: they exist because something — a manual pin, a
-// `sonar start` run, a `.sonar.yaml`, a Compose project or a git checkout —
+// `sonar start` run, a `sonar.yaml`, a Compose project or a git checkout —
 // resolves a port to them. Resolve applies that precedence chain; Groups turns
 // the resolved ports into the `state.Group` rows the daemon publishes.
 package groups

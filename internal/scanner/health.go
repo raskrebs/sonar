@@ -16,7 +16,7 @@ const maxHealthProbes = ports.MaxProbes
 // is ports.ProbeHealth.
 type Probe func(host string, port int, path string, timeout time.Duration) ports.HealthResult
 
-// probeConfigured fills Port.health for every `.sonar.yaml` service that
+// probeConfigured fills Port.health for every `sonar.yaml` service that
 // declares a `health:` path and whose port is listening.
 //
 // Unlike the opt-in `include: ["health"]` probe, this one runs on every tick

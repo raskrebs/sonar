@@ -174,7 +174,7 @@ func handleConfigPath(_ context.Context, _ *Request) (any, error) {
 // delta that justifies it, and a client that reads straight after the reply
 // cannot be served the state from before its own write.
 //
-// It does not scan the machine. A rename, a group pin and a `.sonar.yaml` edit
+// It does not scan the machine. A rename, a group pin and a `sonar.yaml` edit
 // change how the ports the daemon already knows are named and grouped, not
 // which ports exist, so re-running attribution over the last scan's own rows
 // answers the question — and it does so in microseconds instead of behind

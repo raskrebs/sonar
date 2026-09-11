@@ -181,7 +181,7 @@ func killRun(ctx context.Context, targets []killer.Target, snapshot []ports.List
 // scanForKill takes the enriched scan every selector is resolved against, and
 // which the killer reuses instead of scanning a second time. Group attribution
 // is part of that enrichment: without it `-g` would only ever see a Compose
-// project or a run tag, never a `.sonar.yaml` name or a git root.
+// project or a run tag, never a `sonar.yaml` name or a git root.
 func scanForKill() []ports.ListeningPort {
 	found, err := ports.Scan()
 	if err != nil {

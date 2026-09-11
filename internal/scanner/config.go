@@ -5,7 +5,7 @@ import (
 	"github.com/raskrebs/sonar/internal/state"
 )
 
-// The daemon's `.sonar.yaml` index lives here, on the scan loop, because the
+// The daemon's `sonar.yaml` index lives here, on the scan loop, because the
 // loop is the one thing that reads it every tick and the contract makes it
 // long-lived (contract §18). These accessors are how the group handlers
 // (`groups.config.get`, `groups.config.set`, `groups.reload`, `groups.start`)
@@ -23,7 +23,7 @@ func (l *Loop) index() *groups.Index {
 	return l.attr.index
 }
 
-// Configs returns every valid `.sonar.yaml` the daemon knows, deepest first.
+// Configs returns every valid `sonar.yaml` the daemon knows, deepest first.
 func (l *Loop) Configs() []*groups.Config {
 	l.attr.mu.Lock()
 	defer l.attr.mu.Unlock()
@@ -61,7 +61,7 @@ func (l *Loop) ConfigAt(path string) (*groups.Config, bool) {
 	return l.index().ByPath(path)
 }
 
-// ObserveConfig indexes the `.sonar.yaml` files at and above a directory, the
+// ObserveConfig indexes the `sonar.yaml` files at and above a directory, the
 // way a process cwd does during a scan. `groups.start --config-path` uses it so
 // a project the daemon has never seen still starts.
 func (l *Loop) ObserveConfig(dir string) {
@@ -95,7 +95,7 @@ func (l *Loop) reloadLocked() (int, []groups.InvalidConfig) {
 	if st := l.opts.Store; st != nil {
 		known, err := st.Roots()
 		if err != nil {
-			l.opts.Logger.Warn("reading known .sonar.yaml roots", "error", err)
+			l.opts.Logger.Warn("reading known sonar.yaml roots", "error", err)
 		}
 		roots = known
 	}
@@ -112,6 +112,6 @@ func (l *Loop) refreshStaleConfigs() {
 		return
 	}
 	loaded, bad := l.reloadLocked()
-	l.opts.Logger.Info("reloaded .sonar.yaml after a change on disk",
+	l.opts.Logger.Info("reloaded sonar.yaml after a change on disk",
 		"configs", loaded, "invalid", len(bad))
 }

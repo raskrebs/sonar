@@ -47,7 +47,7 @@ func (s *Server) addPrompts() {
 		Arguments: []*mcp.PromptArgument{{
 			Name:        "path",
 			Title:       "Project path",
-			Description: "The project directory holding the .sonar.yaml. Defaults to the working directory the MCP server was started in.",
+			Description: "The project directory holding the sonar.yaml. Defaults to the working directory the MCP server was started in.",
 		}},
 	}, bringUpProjectPrompt)
 }
@@ -80,7 +80,7 @@ func bringUpProjectPrompt(_ context.Context, req *mcp.GetPromptRequest) (*mcp.Ge
 		path = cwd
 	}
 	return userPrompt(bringUpProjectDescrip, fmt.Sprintf(
-		"Read `.sonar.yaml` in %s via `list_groups`, start each service with `start_service` "+
+		"Read `sonar.yaml` in %s via `list_groups`, start each service with `start_service` "+
 			"in dependency order, wait for their ports, and report the URLs.", path)), nil
 }
 

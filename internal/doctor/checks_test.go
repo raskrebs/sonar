@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/raskrebs/sonar/internal/daemon/rpc"
+	"github.com/raskrebs/sonar/internal/groups"
 	"github.com/raskrebs/sonar/internal/install"
 	"github.com/raskrebs/sonar/internal/store"
 )
@@ -152,7 +153,7 @@ func TestProjectConfig(t *testing.T) {
 
 	t.Run("present and valid", func(t *testing.T) {
 		env := fakeEnv(t)
-		write(t, filepath.Join(env.Project, ".sonar.yaml"),
+		write(t, filepath.Join(env.Project, groups.ConfigName),
 			"name: demo\nservices:\n  - name: api\n    port: 3000\n")
 		got := run(t, env, checkProjectConfig)
 		wantStatus(t, got, StatusOK)
@@ -163,8 +164,35 @@ func TestProjectConfig(t *testing.T) {
 
 	t.Run("present and invalid fails", func(t *testing.T) {
 		env := fakeEnv(t)
-		write(t, filepath.Join(env.Project, ".sonar.yaml"), "name: demo\nservices: [broken")
+		write(t, filepath.Join(env.Project, groups.ConfigName), "name: demo\nservices: [broken")
 		wantStatus(t, run(t, env, checkProjectConfig), StatusFail)
+	})
+
+	t.Run("the old dotfile name still loads, warns and is fixable", func(t *testing.T) {
+		env := fakeEnv(t)
+		write(t, filepath.Join(env.Project, groups.LegacyConfigName), "name: demo\n")
+		got := run(t, env, checkProjectConfig)
+		wantStatus(t, got, StatusWarn)
+		if !got.Fixable || !strings.Contains(got.Fix, "git mv "+groups.LegacyConfigName+" "+groups.ConfigName) {
+			t.Errorf("fix = %q (fixable %v), want the git mv to the new name", got.Fix, got.Fixable)
+		}
+		if !strings.Contains(got.Summary, "demo") {
+			t.Errorf("summary = %q, want the group it still loads", got.Summary)
+		}
+	})
+
+	t.Run("a shadowed file warns and is not fixable", func(t *testing.T) {
+		env := fakeEnv(t)
+		write(t, filepath.Join(env.Project, groups.ConfigName), "name: new\n")
+		write(t, filepath.Join(env.Project, groups.LegacyConfigName), "name: old\n")
+		got := run(t, env, checkProjectConfig)
+		wantStatus(t, got, StatusWarn)
+		if got.Fixable {
+			t.Error("two files need a person to reconcile them; the check must not be fixable")
+		}
+		if !strings.Contains(got.Summary, "new") || !strings.Contains(got.Summary, groups.LegacyConfigName) {
+			t.Errorf("summary = %q, want the file in use and the ignored one", got.Summary)
+		}
 	})
 }
 

@@ -28,14 +28,14 @@ var (
 
 var upCmd = &cobra.Command{
 	Use:   "up [group]",
-	Short: "Start a group's services from its .sonar.yaml",
-	Long: "Start every service the group's .sonar.yaml declares, in depends_on\n" +
+	Short: "Start a group's services from its sonar.yaml",
+	Long: "Start every service the group's sonar.yaml declares, in depends_on\n" +
 		"order: a service waits for the ports its dependencies declare before it\n" +
 		"is started, and services that are already running are skipped.\n\n" +
 		"Each service runs detached in its own process group, with stdout and\n" +
 		"stderr in ~/.config/sonar/logs/<group>/<service>.log. Stop them all\n" +
 		"again with `sonar kill -g <group>`.\n\n" +
-		"With no argument the group comes from the .sonar.yaml at or above the\n" +
+		"With no argument the group comes from the sonar.yaml at or above the\n" +
 		"current directory.",
 	Args: cobra.MaximumNArgs(1),
 	RunE: upRun,
@@ -81,7 +81,7 @@ func upParams(args []string) (rpc.GroupsStartParams, error) {
 	}
 	if onRemoteHost() {
 		// The config path below is a path on this machine, and the remote
-		// daemon resolves groups against its own .sonar.yaml files. Naming the
+		// daemon resolves groups against its own sonar.yaml files. Naming the
 		// group is the only thing that can mean the same on both sides.
 		return params, fmt.Errorf("name the group to start on %s: `sonar up <group> --host %s`",
 			remoteHostFlag, remoteHostFlag)

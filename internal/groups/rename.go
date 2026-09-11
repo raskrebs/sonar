@@ -14,9 +14,9 @@ import (
 // becomes `<Project>@<worktree>`.
 type RenamePlan struct {
 	// Main is the main checkout's root, the key an alias is stored under. It is
-	// empty for a `.sonar.yaml` project that is not a checkout's root.
+	// empty for a `sonar.yaml` project that is not a checkout's root.
 	Main string
-	// ConfigPath is the `.sonar.yaml` to write the new `name:` into. Empty
+	// ConfigPath is the `sonar.yaml` to write the new `name:` into. Empty
 	// means the project has no file of its own and the name is stored as an
 	// alias of Main instead.
 	ConfigPath string
@@ -103,7 +103,7 @@ func PlanRename(gg []state.Group, x *Index, from, to string) (*RenamePlan, error
 	}
 	if g.ConfigPath != nil && !(inRepo && co.Linked()) {
 		if cfg, ok := x.ByPath(*g.ConfigPath); ok && x.GroupOf(cfg) == g.Name {
-			// A `.sonar.yaml` project that is not a checkout's root: nested in
+			// A `sonar.yaml` project that is not a checkout's root: nested in
 			// one, or outside git altogether. Its file is its name.
 			plan := &RenamePlan{ConfigPath: cfg.Path, Project: to, Renames: map[string]string{}}
 			if from != to {

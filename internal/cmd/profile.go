@@ -140,8 +140,8 @@ var profileDeleteCmd = &cobra.Command{
 }
 
 // profileExportCmd is the migration path off profiles: it prints the
-// `.sonar.yaml` a profile would become, and never writes it. A profile is a
-// per-machine snapshot of ports; `.sonar.yaml` is committed with the project,
+// `sonar.yaml` a profile would become, and never writes it. A profile is a
+// per-machine snapshot of ports; `sonar.yaml` is committed with the project,
 // so which repository it belongs in is the user's call, not ours (daemon spec,
 // "Migration and deprecation").
 var profileExportCmd = &cobra.Command{

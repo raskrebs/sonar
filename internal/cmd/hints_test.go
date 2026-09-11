@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raskrebs/sonar/internal/groups"
 	"github.com/spf13/cobra"
 )
 
@@ -236,8 +237,8 @@ func TestNoticeTexts(t *testing.T) {
 	for _, s := range []string{
 		HintProfileToConfig("my-app"), HintUpProfile("my-app"),
 	} {
-		if !strings.Contains(s, ".sonar.yaml") {
-			t.Errorf("notice %q should name .sonar.yaml", s)
+		if !strings.Contains(s, groups.ConfigName) {
+			t.Errorf("notice %q should name %s", s, groups.ConfigName)
 		}
 		if strings.Contains(s, "\n") {
 			t.Errorf("notice %q must be a single line", s)

@@ -1,6 +1,6 @@
 package state
 
-// Service is one entry of a group's `.sonar.yaml` services list. PortActual is
+// Service is one entry of a group's `sonar.yaml` services list. PortActual is
 // the port the service is actually listening on right now, resolved by the
 // group resolver (spec 3 needs this join).
 type Service struct {
@@ -10,7 +10,7 @@ type Service struct {
 	Port   *int    `json:"port" jsonschema:"nullable"`
 	Health *string `json:"health" jsonschema:"nullable"`
 	// Description, Icon and Color are user-authored metadata from
-	// `.sonar.yaml` (contract §13.1). The daemon stores and serves them; what
+	// `sonar.yaml` (contract §13.1). The daemon stores and serves them; what
 	// an icon or a colour means is the client's business.
 	Description *string  `json:"description" jsonschema:"nullable"`
 	Icon        *string  `json:"icon" jsonschema:"nullable"`

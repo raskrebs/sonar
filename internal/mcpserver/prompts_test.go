@@ -73,7 +73,7 @@ func TestBringUpProjectDefaultsToTheWorkingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := promptText(t, h, mcpserver.PromptBringUpProject, nil)
-	want := "Read `.sonar.yaml` in " + cwd + " via `list_groups`, start each service with " +
+	want := "Read `sonar.yaml` in " + cwd + " via `list_groups`, start each service with " +
 		"`start_service` in dependency order, wait for their ports, and report the URLs."
 	if text != want {
 		t.Fatalf("bring_up_project =\n%q\nwant\n%q", text, want)

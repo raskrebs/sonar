@@ -11,13 +11,13 @@ import "path/filepath"
 // back from the kernel, is /private/var/folders/…. A config indexed under one
 // spelling is then invisible to a lookup with the other, and `sonar start`
 // falls through to the git root or the directory name instead of the group the
-// `.sonar.yaml` asked for.
+// `sonar.yaml` asked for.
 //
 // Callers normalise once, at the boundary where a path enters the resolver —
 // Load, Index.Observe/Nearest/AddFile/Reload, Find and spawn.Resolve — and pass
 // canonical paths from there on.
 //
-// A path that does not exist yet (a `.sonar.yaml` about to be written, or one
+// A path that does not exist yet (a `sonar.yaml` about to be written, or one
 // just deleted) still normalises: the deepest existing ancestor is resolved and
 // the remaining names are appended. An empty path stays empty.
 func Canonical(path string) string {

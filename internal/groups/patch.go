@@ -27,7 +27,7 @@ const (
 // knows about sort last and are never moved.
 var keyOrder = []string{"name", "cmd", "cwd", "port", "health", "description", "icon", "color", "depends_on"}
 
-// ServicePatch is the editable subset of one `.sonar.yaml` service
+// ServicePatch is the editable subset of one `sonar.yaml` service
 // (contract §13.2). Three states matter: a field the caller did not mention is
 // left alone, a field set to a value is written, and a field set to null is
 // removed from the file. JSON's absent/null distinction is lost by pointers
@@ -165,7 +165,7 @@ func (e *ServiceNotFoundError) Error() string {
 	return fmt.Sprintf("no service %q in %s", e.Name, e.Path)
 }
 
-// PatchServices applies metadata edits to the services in a `.sonar.yaml` and
+// PatchServices applies metadata edits to the services in a `sonar.yaml` and
 // writes the file back. It is EditServices with only the patch list filled in;
 // see ConfigEdit for adding, renaming and removing services.
 func PatchServices(path string, edits []ServiceEdit) (*Config, error) {
@@ -270,7 +270,7 @@ func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
 }
 
 // encode renders the node tree back to YAML with the two-space indentation
-// `.sonar.yaml` is written in.
+// `sonar.yaml` is written in.
 func encode(doc *yaml.Node) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

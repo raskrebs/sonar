@@ -1,7 +1,6 @@
 package groups
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 
@@ -9,7 +8,7 @@ import (
 )
 
 // Index is everything the resolver knows about where projects live: the
-// `.sonar.yaml` files seen so far, the ones that failed to parse, and the
+// `sonar.yaml` files seen so far, the ones that failed to parse, and the
 // working directory of each Compose project.
 //
 // It is in-memory and rebuilt per command in the CLI's direct-scan path; the
@@ -78,7 +77,7 @@ func (x *Index) AddFile(path string) error {
 	return nil
 }
 
-// Observe indexes every `.sonar.yaml` between dir and the git root that
+// Observe indexes every `sonar.yaml` between dir and the git root that
 // contains it (inclusive). This is the "seen via a process cwd" arm of the
 // spec's discovery rules: a dev server running in a repo is enough for its
 // project's config to be known, without anyone running `sonar init`.
@@ -120,12 +119,8 @@ func (x *Index) probeDir(dir string) {
 		return
 	}
 	x.probed[dir] = true
-	for _, name := range []string{ConfigName, altConfigName} {
-		path := filepath.Join(dir, name)
-		if info, err := os.Lstat(path); err == nil && !info.IsDir() {
-			_ = x.AddFile(path)
-			return
-		}
+	if present := FilesIn(dir); len(present) > 0 {
+		_ = x.AddFile(present[0])
 	}
 }
 
@@ -208,7 +203,7 @@ func (x *Index) Invalid() []InvalidConfig {
 // directory now (see ports.batchGetCwds), but plenty of individual rows still
 // arrive without one: a Docker container has no cwd of its own, and a process
 // that denies the scanner access keeps its own. Requiring one left every
-// `.sonar.yaml` unable to claim the ports it declares — the group existed in
+// `sonar.yaml` unable to claim the ports it declares — the group existed in
 // the index and no listener ever joined it. When the cwd is missing the
 // question that remains is still answerable: is there exactly one known config
 // claiming this port? One is an answer. Two is a guess, and a guess is worse

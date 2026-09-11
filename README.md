@@ -174,10 +174,10 @@ sonar start --list
 
 Nothing has to be passed:
 
-- **Group** — `--group`, else the `name` in the nearest `.sonar.yaml`, else the
+- **Group** — `--group`, else the `name` in the nearest `sonar.yaml`, else the
   git root's directory name (a worktree becomes `repo@worktree`), else the name
   of the current directory.
-- **Name** — `--name`, else the `.sonar.yaml` service whose `cmd` matches, else
+- **Name** — `--name`, else the `sonar.yaml` service whose `cmd` matches, else
   inferred from the command (`npm run dev` → `dev`, `uv run api` → `api`,
   `python -m uvicorn` → `uvicorn`, `./dev.sh` → `dev.sh`).
 - **Port** — `--port` is a hint, not a binding: the run shows as `starting`
@@ -200,9 +200,9 @@ sonar start --list --json
 # check
 ```
 
-### `.sonar.yaml`
+### `sonar.yaml`
 
-A project names itself and its services in a `.sonar.yaml` at the repository
+A project names itself and its services in a `sonar.yaml` at the repository
 root. It is optional — sonar groups by git root without it — and it is meant to
 be committed:
 
@@ -240,8 +240,13 @@ ports: [9229]        # ports that belong to this project without a service
 - `depends_on` — start order. Naming a service that is not in the file, or a
   cycle, is an error; an invalid file is reported once and never stops a scan.
 
-`.sonar.yml` is read if that is how you spell it; `sonar init` always writes
-`.sonar.yaml`. The daemon watches the projects it knows about and picks up
+`sonar.yml` is read if that is how you spell it; `sonar init` always writes
+`sonar.yaml`. The file used to be the dotfile `.sonar.yaml`, and that name
+still works: sonar looks for `sonar.yaml`, `sonar.yml`, `.sonar.yaml` and
+`.sonar.yml`, in that order, and reads the first one it finds. Edits go back
+to the file sonar read, so nothing is renamed behind your back. `sonar doctor`
+points out a file under the old name, and `sonar doctor --fix` renames it
+(with `git mv` when the file is tracked). The daemon watches the projects it knows about and picks up
 edits to the file without a restart. Every edit sonar makes — from the desktop
 app, from `sonar groups add`, `rename` and `remove`, from an agent — goes
 through the daemon, which re-renders the file from its own syntax tree, so
@@ -253,13 +258,13 @@ YAML library keeps the comment but not its column.
 ### `sonar up`
 
 ```sh
-sonar up                       # the .sonar.yaml at or above this directory
+sonar up                       # the sonar.yaml at or above this directory
 sonar up my-app                # a group by name
 sonar up --only api,frontend
 sonar up --json
 ```
 
-Starts every service the group's `.sonar.yaml` declares, in `depends_on` order:
+Starts every service the group's `sonar.yaml` declares, in `depends_on` order:
 a service waits for the ports its dependencies declare before it is started, and
 one that is already listening is skipped. Each runs detached in its own process
 group, with its output in `~/.config/sonar/logs/<group>/<service>.log`.
@@ -294,11 +299,11 @@ sonar groups remove "$group" jobs
 
 `sonar groups` lists every group sonar can see and where each name came from:
 `manual` (you pinned it with `sonar assign`), `start` (a `sonar start` run),
-`file` (a `.sonar.yaml`) or `auto` (the git root or the Compose project).
+`file` (a `sonar.yaml`) or `auto` (the git root or the Compose project).
 `sonar groups <name>` shows one group's ports and services, and the services
 that are declared but not running.
 
-`sonar init` writes a `.sonar.yaml` at the git root from what is listening right
+`sonar init` writes a `sonar.yaml` at the git root from what is listening right
 now — desktop apps and ports below 1024 left out. It refuses to overwrite
 without `--force`, and `--dry-run` prints the file instead of writing it.
 `--merge` appends to a file that is already there instead of refusing, and
@@ -307,7 +312,7 @@ instead of the ones it found, keeping the command it guessed for a port you
 kept. `--force` and `--merge` are mutually exclusive.
 
 `sonar groups add <group> <name> --port N` appends a service to that group's
-`.sonar.yaml`, with `--cmd`, `--cwd`, `--health`, `--description`, `--icon`,
+`sonar.yaml`, with `--cmd`, `--cwd`, `--health`, `--description`, `--icon`,
 `--color` and a repeatable `--depends-on` for the rest of it. `sonar groups
 rename <group> <old> <new>` renames one everywhere in the file, `depends_on`
 references included, and `sonar groups remove <group> <name>` deletes one and
@@ -537,7 +542,7 @@ Every write takes `--host` too, and does there exactly what it does here:
 sonar kill 3000 --host hetzner                 # stop a port on that machine
 sonar kill -g api --host hetzner               # a whole group of its services
 sonar kill-all --filter docker --host hetzner  # its containers
-sonar up api --host hetzner                    # start a group from its .sonar.yaml
+sonar up api --host hetzner                    # start a group from its sonar.yaml
 sonar logs 3000 --host hetzner                 # tail its output here
 sonar rename 3000 storefront --host hetzner    # its name, in its database
 sonar assign 3000 storefront --host hetzner
@@ -562,7 +567,7 @@ remote form. Everything else needs the daemon running here — it is where the
 connection to the other machine lives — and says so instead of quietly scanning
 this machine instead.
 
-`sonar up --host` needs the group named: the `.sonar.yaml` at your working
+`sonar up --host` needs the group named: the `sonar.yaml` at your working
 directory is a path on this machine, and it is the remote daemon that reads the
 file and starts the services.
 
@@ -746,7 +751,7 @@ is 0 unless something **failed**, so `sonar doctor` belongs in a setup script.
 | `mcp_registered.{claude_code,cursor,codex}` | sonar's MCP server is in that client's config |
 | `skills_installed` | the bundled skill is installed and current |
 | `hooks_installed` | the optional Claude Code hooks are installed |
-| `project_config` | this project has a `.sonar.yaml` that loads |
+| `project_config` | this project has a `sonar.yaml` that loads; warns on the old `.sonar.yaml` name (fixable) or on a second, ignored file |
 | `docker` | the docker CLI is there and its daemon answers |
 | `desktop_installed` | the desktop app is installed, and which version (`skip` on Windows) |
 | `tray` | the superseded macOS `sonar-tray` binary is still around |
@@ -856,7 +861,7 @@ silences the notices, and `--json` output never carries them.
 | `sonar up X` (checked a profile) | `sonar up X` now *starts* the group |
 | `sonar tray` (Swift menu bar app) | `sonar tray` launches the desktop app |
 
-Profiles were a per-machine snapshot of ports; `.sonar.yaml` is committed with
+Profiles were a per-machine snapshot of ports; `sonar.yaml` is committed with
 the project. Convert one and read it before you keep it — nothing is written
 for you:
 
@@ -866,7 +871,7 @@ sonar profile list
 ```
 
 ```sh
-sonar profile export my-app > .sonar.yaml
+sonar profile export my-app > sonar.yaml
 ```
 
 A profile never recorded how a service starts, so the proposal has ports,
@@ -918,7 +923,7 @@ sonar doctor --json
 Grouping needs each process's working directory, and every platform now has
 one: `/proc` on Linux, `lsof` on macOS, and on Windows a read of the process's
 own PEB. So git-root groups, `project_root` and cwd-based names work the same
-everywhere, and `sonar init` can propose a `.sonar.yaml` from what is listening
+everywhere, and `sonar init` can propose a `sonar.yaml` from what is listening
 on any of the three.
 
 The desktop app is narrower for now: `sonar install desktop` installs it on

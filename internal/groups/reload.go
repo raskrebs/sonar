@@ -103,7 +103,7 @@ func (x *Index) ByPath(path string) (*Config, bool) {
 //
 // This is `groups.reload` and the daemon's own reaction to an mtime change. The
 // index is long-lived (contract §18), so this is the only thing that lets a
-// running daemon notice a `.sonar.yaml` written after it started.
+// running daemon notice a `sonar.yaml` written after it started.
 func (x *Index) Reload(roots []string) (int, []InvalidConfig) {
 	dirs := map[string]bool{}
 	for _, cfg := range x.configs {
@@ -133,7 +133,7 @@ func (x *Index) Reload(roots []string) (int, []InvalidConfig) {
 			delete(x.stamps, cfg.Path)
 			delete(x.configs, dir)
 		}
-		for _, name := range []string{ConfigName, altConfigName} {
+		for _, name := range configNames {
 			path := filepath.Join(dir, name)
 			delete(x.invalid, path)
 			delete(x.stamps, path)

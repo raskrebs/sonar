@@ -17,7 +17,7 @@ import (
 const DefaultTTL = 24 * time.Hour
 
 // MaxCount caps how many ports one key may hold, so a typo in `count` cannot
-// reserve a whole range. It is the same cap `.sonar.yaml` puts on
+// reserve a whole range. It is the same cap `sonar.yaml` puts on
 // worktree_ports, so a block a config asks for is always one Acquire grants.
 const MaxCount = groups.MaxWorktreePorts
 
@@ -59,7 +59,7 @@ type Options struct {
 	// DefaultTTL overrides DefaultTTL for callers that pass no ttl.
 	DefaultTTL time.Duration
 	// DefaultCount is how many ports a request that names no count takes for
-	// a project: the daemon answers it from the project's `.sonar.yaml`
+	// a project: the daemon answers it from the project's `sonar.yaml`
 	// worktree_ports. A result of zero, or a nil func, means one port.
 	DefaultCount func(project string) int
 }

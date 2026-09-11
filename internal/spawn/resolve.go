@@ -10,7 +10,7 @@ import (
 )
 
 // Resolution is the group and name a run is registered under, plus the
-// `.sonar.yaml` (if any) that decided them.
+// `sonar.yaml` (if any) that decided them.
 type Resolution struct {
 	Group      string
 	Name       string
@@ -19,8 +19,8 @@ type Resolution struct {
 
 // Resolve implements steps 1 and 2 of the daemon spec's `sonar start`:
 //
-//	group: --group | nearest .sonar.yaml | git root | base name of cwd
-//	name:  --name  | the .sonar.yaml service whose cmd is this command
+//	group: --group | nearest sonar.yaml | git root | base name of cwd
+//	name:  --name  | the sonar.yaml service whose cmd is this command
 //	       | InferName(argv)
 //
 // cwd may be empty, in which case the process working directory is used.
@@ -63,7 +63,7 @@ func Resolve(cwd string, argv []string, groupFlag, nameFlag string) Resolution {
 // then the directory the command was started in. Both of the first two are
 // named the way the resolver names them, so a run started in a linked worktree
 // lands in `<project>@<worktree>` even when the worktree carries a copy of the
-// main checkout's `.sonar.yaml`.
+// main checkout's `sonar.yaml`.
 func inferGroup(index *groups.Index, cwd string, cfg *groups.Config) string {
 	if cfg != nil && cfg.Name != "" {
 		return index.GroupOf(cfg)
@@ -98,7 +98,7 @@ func matchService(cfg *groups.Config, cwd string, argv []string) (string, bool) 
 	return "", false
 }
 
-// SplitCmd turns a `.sonar.yaml` `cmd:` string into argv with shell-style
+// SplitCmd turns a `sonar.yaml` `cmd:` string into argv with shell-style
 // quoting and no shell execution (contract §4).
 //
 // Backslashes follow the host's convention, because a `cmd:` is written for

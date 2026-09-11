@@ -13,7 +13,7 @@ import (
 
 // header is written above a generated config so the next reader knows where it
 // came from and that it is meant to be edited and committed.
-const header = `# .sonar.yaml — sonar group configuration, written by ` + "`sonar init`" + `.
+const header = `# ` + ConfigName + ` — sonar group configuration, written by ` + "`sonar init`" + `.
 # Edit and commit it: sonar uses it to name this project's group and to know
 # which services belong to it. https://github.com/raskrebs/sonar
 `

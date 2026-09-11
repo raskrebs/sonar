@@ -345,7 +345,7 @@ func listPorts(ctx context.Context, q listQuery) ([]ports.ListeningPort, *groups
 	if healthFlag {
 		ports.EnrichHealth(results, 2*time.Second, 0)
 	}
-	// Resolve every port's group: pin > run > .sonar.yaml > Compose > git root.
+	// Resolve every port's group: pin > run > sonar.yaml > Compose > git root.
 	// This is the no-daemon path, so it happens per command.
 	_, index := groups.Attribute(results)
 	return applyListFilters(results, q), index, nil
@@ -399,7 +399,7 @@ func applyListFilters(results []ports.ListeningPort, q listQuery) []ports.Listen
 }
 
 // observeConfigs builds the group index the tree view needs from rows the
-// daemon resolved. It only looks for `.sonar.yaml` files — the group each port
+// daemon resolved. It only looks for `sonar.yaml` files — the group each port
 // belongs to already came off the wire — so the tree shows the same service
 // names and roots either way.
 func observeConfigs(rows []ports.ListeningPort) *groups.Index {

@@ -10,7 +10,7 @@ import (
 )
 
 // ErrInvalidName is returned when a rename or group name is empty or holds a
-// separator. Same rule as .sonar.yaml service names in the daemon spec.
+// separator. Same rule as sonar.yaml service names in the daemon spec.
 var ErrInvalidName = errors.New("name must be non-empty and free of whitespace, / and \\")
 
 func validName(name string) error {

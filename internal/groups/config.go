@@ -11,12 +11,59 @@ import (
 )
 
 // ConfigName is the file a project commits at its repository root to name its
-// group and describe its services.
-const ConfigName = ".sonar.yaml"
+// group and describe its services. It is what sonar writes; configNames is
+// everything it reads.
+const ConfigName = "sonar.yaml"
 
-// altConfigName is accepted on read so a project that spells the extension the
-// other way is not silently ignored. `sonar init` always writes ConfigName.
-const altConfigName = ".sonar.yml"
+// LegacyConfigName is the dotfile sonar wrote before the file was renamed. It is
+// still read, and an edit goes back to it, but nothing new is created with it.
+const LegacyConfigName = ".sonar.yaml"
+
+// configNames are the spellings a directory is searched for, in order: the
+// current name first, then the other extension, then the dotfiles it replaced.
+// Only the first one present is used; `sonar doctor` reports the rest.
+var configNames = []string{ConfigName, "sonar.yml", LegacyConfigName, ".sonar.yml"}
+
+// ConfigNames returns the spellings a directory is searched for, in order.
+func ConfigNames() []string { return append([]string(nil), configNames...) }
+
+// IsConfigName reports whether a base name is one sonar reads as a config.
+func IsConfigName(base string) bool {
+	for _, name := range configNames {
+		if base == name {
+			return true
+		}
+	}
+	return false
+}
+
+// IsLegacyName reports whether a base name is one of the dotfile spellings.
+func IsLegacyName(base string) bool {
+	return IsConfigName(base) && strings.HasPrefix(base, ".")
+}
+
+// FilesIn lists the config files present in dir, in lookup order. The first is
+// the one sonar uses; any others are shadowed by it.
+func FilesIn(dir string) []string {
+	var out []string
+	for _, name := range configNames {
+		path := filepath.Join(dir, name)
+		if info, err := os.Lstat(path); err == nil && !info.IsDir() {
+			out = append(out, path)
+		}
+	}
+	return out
+}
+
+// TargetIn is the file a write into dir goes to: the config already there, in
+// whatever spelling it has, so an edit never leaves two files side by side —
+// else a new ConfigName.
+func TargetIn(dir string) string {
+	if present := FilesIn(dir); len(present) > 0 {
+		return present[0]
+	}
+	return filepath.Join(dir, ConfigName)
+}
 
 // Service is one entry of a config's `services:` list. Description, Icon and
 // Color are user-authored metadata the daemon never infers and never

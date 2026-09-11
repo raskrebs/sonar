@@ -16,7 +16,7 @@ import (
 // `groups.rename` (step 5A.6) renames a project and, with it, every checkout of
 // it: the main checkout's group and each linked worktree's `<project>@<wt>`.
 // The name lives where the project already keeps it — the `name:` of the main
-// checkout's `.sonar.yaml` — or, for a project with no file, in the daemon's
+// checkout's `sonar.yaml` — or, for a project with no file, in the daemon's
 // store, keyed by the main checkout's root.
 func init() {
 	RegisterHandler("groups.rename", handleGroupsRename)

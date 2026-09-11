@@ -91,14 +91,14 @@ func MatchKeys(p state.Port) []string {
 //
 //  1. manual — a pin from `sonar assign`
 //  2. start  — a `sonar start` run that owns the process
-//  3. file   — a known `.sonar.yaml` that claims the port
+//  3. file   — a known `sonar.yaml` that claims the port
 //  4. compose — the Compose project, unless its working directory is inside a
 //     git checkout, in which case the container merges into that checkout's
 //     group so a Compose db and a native api are one group
 //  5. gitroot — the checkout containing the process cwd, named `<project>` or
 //     `<project>@<worktree>`, where the project name comes from the main
 //     checkout only: an alias from `groups.rename`, else the `name:` of its
-//     `.sonar.yaml`, else its directory name. A `.sonar.yaml` at the
+//     `sonar.yaml`, else its directory name. A `sonar.yaml` at the
 //     checkout's root makes the source `file`; a linked worktree's own copy
 //     supplies services but never the name (step 5A.6)
 //  6. none — group stays null

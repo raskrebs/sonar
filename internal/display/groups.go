@@ -130,7 +130,7 @@ func RenderGroup(w io.Writer, g state.Group, pp []ports.ListeningPort) {
 	}
 }
 
-// serviceIcon prefixes a service with the icon its `.sonar.yaml` gave it.
+// serviceIcon prefixes a service with the icon its `sonar.yaml` gave it.
 // The daemon never interprets the string; the terminal prints whatever the
 // author wrote, which for a one-rune emoji is exactly what they meant.
 func serviceIcon(s state.Service) string {

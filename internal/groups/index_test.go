@@ -173,6 +173,67 @@ func TestIndexAcceptsTheYmlSpelling(t *testing.T) {
 	}
 }
 
+// TestIndexReadsTheOldDotfile: projects committed before the rename keep
+// working, and so do the worktrees that carry a copy of their file.
+func TestIndexReadsTheOldDotfile(t *testing.T) {
+	base := tempTree(t)
+	repo := mkdir(t, base, "repo")
+	mkdir(t, repo, ".git")
+	writeFile(t, filepath.Join(repo, LegacyConfigName), "name: legacy\n")
+
+	x := NewIndex()
+	x.Observe(repo)
+	if cfg := x.At(repo); cfg == nil || cfg.Name != "legacy" {
+		t.Fatalf("At = %+v", cfg)
+	}
+}
+
+// TestIndexPrefersTheCurrentName: with both files in one directory, sonar.yaml
+// is the one read and the dotfile is shadowed, never merged.
+func TestIndexPrefersTheCurrentName(t *testing.T) {
+	base := tempTree(t)
+	repo := mkdir(t, base, "repo")
+	mkdir(t, repo, ".git")
+	writeFile(t, filepath.Join(repo, LegacyConfigName), "name: old\n")
+	writeFile(t, filepath.Join(repo, ConfigName), "name: new\n")
+
+	x := NewIndex()
+	x.Observe(repo)
+	if cfg := x.At(repo); cfg == nil || cfg.Name != "new" {
+		t.Fatalf("At = %+v, want the sonar.yaml", cfg)
+	}
+	present := FilesIn(repo)
+	if len(present) != 2 || filepath.Base(present[0]) != ConfigName || filepath.Base(present[1]) != LegacyConfigName {
+		t.Errorf("FilesIn = %v, want sonar.yaml then .sonar.yaml", present)
+	}
+}
+
+// TestTargetIn: a write goes to the file already there, whatever its spelling,
+// and only a directory without one gets a new sonar.yaml.
+func TestTargetIn(t *testing.T) {
+	base := tempTree(t)
+	empty := mkdir(t, base, "empty")
+	if got := TargetIn(empty); got != filepath.Join(empty, ConfigName) {
+		t.Errorf("TargetIn(empty) = %s, want a new %s", got, ConfigName)
+	}
+	legacy := mkdir(t, base, "legacy")
+	writeFile(t, filepath.Join(legacy, LegacyConfigName), "name: legacy\n")
+	if got := TargetIn(legacy); got != filepath.Join(legacy, LegacyConfigName) {
+		t.Errorf("TargetIn(legacy) = %s, want the existing %s", got, LegacyConfigName)
+	}
+}
+
+func TestIsLegacyName(t *testing.T) {
+	for name, want := range map[string]bool{
+		".sonar.yaml": true, ".sonar.yml": true,
+		"sonar.yaml": false, "sonar.yml": false, ".env": false,
+	} {
+		if got := IsLegacyName(name); got != want {
+			t.Errorf("IsLegacyName(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
 // TestIndexKeysConfigsCanonically: a config reached through an unresolved path
 // — a Reload root the store handed back, or a path a client typed — has to land
 // under the same key as the same directory found by walking a process cwd. On

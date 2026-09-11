@@ -14,7 +14,7 @@ import (
 )
 
 // `groups.init` is `sonar init` over the wire (contract §4): it proposes a
-// `.sonar.yaml` for a checkout from what is listening in it right now, and
+// `sonar.yaml` for a checkout from what is listening in it right now, and
 // optionally writes it.
 //
 // Both paths share one proposer, groups.Propose, and nothing else. The CLI
@@ -52,7 +52,9 @@ func handleGroupsInit(_ context.Context, req *Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	target := filepath.Join(root, groups.ConfigName)
+	// A project that already has a config, in any spelling, is merged into or
+	// overwritten in place; only a project without one gets a new file.
+	target := groups.TargetIn(root)
 	// The daemon writes exactly one filename on a client's say-so, and the
 	// check is made here too rather than trusted to the join above.
 	if err := checkConfigPath(target); err != nil {
@@ -117,7 +119,7 @@ func handleGroupsInit(_ context.Context, req *Request) (any, error) {
 	return result, nil
 }
 
-// mergeInit appends a proposal into a `.sonar.yaml` that is already there,
+// mergeInit appends a proposal into a `sonar.yaml` that is already there,
 // rather than refusing it. The append goes through the same node-level edit
 // `groups.config.set` uses, so the file's comments and order survive and a
 // service name or port the file already has is a `conflict` — and, because the

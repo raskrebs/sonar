@@ -50,9 +50,9 @@ var startCmd = &cobra.Command{
 	Short: "Start a command as a named service in a group",
 	Long: "Start <command> and record it so sonar can attribute every port it (or\n" +
 		"anything it spawns) opens to a group and a service name.\n\n" +
-		"The group is --group, else the nearest .sonar.yaml, else the git\n" +
+		"The group is --group, else the nearest sonar.yaml, else the git\n" +
 		"checkout the command runs in, else the directory name. The name is\n" +
-		"--name, else the matching .sonar.yaml service, else inferred from the\n" +
+		"--name, else the matching sonar.yaml service, else inferred from the\n" +
 		"command (`npm run dev` is `dev`).\n\n" +
 		"The child runs in its own process group with SONAR_GROUP, SONAR_NAME\n" +
 		"and SONAR_RUN_ID in its environment. Ctrl+C goes to the whole tree and\n" +
@@ -64,7 +64,7 @@ var startCmd = &cobra.Command{
 }
 
 func init() {
-	startCmd.Flags().StringVar(&startGroup, "group", "", "Group to attribute this run to (default: .sonar.yaml, git root, or directory name)")
+	startCmd.Flags().StringVar(&startGroup, "group", "", "Group to attribute this run to (default: sonar.yaml, git root, or directory name)")
 	startCmd.Flags().StringVar(&startName, "name", "", "Service name for this run (default: inferred from the command)")
 	startCmd.Flags().IntVar(&startPort, "port", 0, "Port this command is expected to bind; the run shows as starting until it does")
 	startCmd.Flags().BoolVar(&startDetach, "detach", false, "Run in the background, logging to ~/.config/sonar/logs/<group>/<name>.log")

@@ -63,7 +63,7 @@ func TestProposeFromRunningPorts(t *testing.T) {
 	if loaded.Name != cfg.Name || len(loaded.Services) != len(cfg.Services) {
 		t.Errorf("round trip = %+v", loaded)
 	}
-	if !strings.HasPrefix(string(data), "# .sonar.yaml") {
+	if !strings.HasPrefix(string(data), "# "+ConfigName) {
 		t.Errorf("generated file has no header:\n%s", data)
 	}
 }

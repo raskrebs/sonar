@@ -104,7 +104,7 @@ func HintRunsToStartList() string {
 }
 
 // HintProfileToConfig is the notice every `sonar profile` subcommand prints:
-// profiles are a per-machine file, `.sonar.yaml` is committed with the project.
+// profiles are a per-machine file, `sonar.yaml` is committed with the project.
 func HintProfileToConfig(name string) string {
 	if name == "" {
 		name = "<name>"

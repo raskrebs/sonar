@@ -9,7 +9,7 @@ import (
 )
 
 // The read half of the groups namespace. A group is derived state — the
-// scanner resolves every port to a project and joins the `.sonar.yaml`
+// scanner resolves every port to a project and joins the `sonar.yaml`
 // services onto it — so listing groups is reading the same snapshot the ports
 // read uses, not a second computation that could disagree with it.
 func init() {

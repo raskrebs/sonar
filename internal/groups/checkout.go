@@ -13,7 +13,7 @@ import (
 // group of its own — `<project>` for the main checkout, `<project>@<worktree>`
 // for a linked one — and all of them share the project name, which only the
 // main checkout decides (step 5A.6). A worktree's copy of a committed
-// `.sonar.yaml` describes its services, never its name, so a stale copy cannot
+// `sonar.yaml` describes its services, never its name, so a stale copy cannot
 // fold the worktree back into the main checkout's group.
 type Checkout struct {
 	// Root is the directory holding the `.git` entry.
@@ -128,7 +128,7 @@ func parseHead(data []byte) string {
 }
 
 // SetAliases installs the project names the daemon stores for projects that
-// have no `.sonar.yaml` to write a name into (`groups.rename`), keyed by the
+// have no `sonar.yaml` to write a name into (`groups.rename`), keyed by the
 // main checkout's root. The scanner sets them every tick from the store; a nil
 // map clears them.
 func (x *Index) SetAliases(aliases map[string]string) {
@@ -141,7 +141,7 @@ func (x *Index) SetAliases(aliases map[string]string) {
 }
 
 // fileProjectName is the project name before any alias: the name the main
-// checkout's `.sonar.yaml` gives it, else the main checkout's directory name.
+// checkout's `sonar.yaml` gives it, else the main checkout's directory name.
 // The main checkout is probed here, because a process in a linked worktree is
 // what usually brings a project to the index's attention, and its walk stops
 // at the worktree's own root.
@@ -155,7 +155,7 @@ func (x *Index) fileProjectName(main string) string {
 
 // ProjectName is the name every checkout of one repository shares, decided by
 // the main checkout at main: a stored alias, else the `name:` of the main
-// checkout's `.sonar.yaml`, else its directory name.
+// checkout's `sonar.yaml`, else its directory name.
 func (x *Index) ProjectName(main string) string {
 	if alias := x.aliases[main]; alias != "" {
 		return alias
@@ -197,7 +197,7 @@ func (x *Index) GroupOf(cfg *Config) string {
 // NearestFor is Nearest confined to dir's own checkout when that checkout is a
 // linked worktree. Tools put worktrees inside the main checkout (for example
 // `<repo>/.claude/worktrees/<name>`), and an unconfined walk from one of them
-// climbs straight into the main checkout's `.sonar.yaml`.
+// climbs straight into the main checkout's `sonar.yaml`.
 func (x *Index) NearestFor(dir string) *Config {
 	if co, ok := Locate(dir); ok {
 		cfg := x.Nearest(dir)

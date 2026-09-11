@@ -1,4 +1,4 @@
-// Package groupstart serves `groups.start`: it walks a `.sonar.yaml`'s
+// Package groupstart serves `groups.start`: it walks a `sonar.yaml`'s
 // services in dependency order and spawns each one detached, streaming a chunk
 // per service as it goes (contract §1).
 //
@@ -247,7 +247,7 @@ func snapshot(rt *daemon.Runtime) state.Snapshot {
 	return snap
 }
 
-// resolveConfig finds the `.sonar.yaml` this call is about, by path or by
+// resolveConfig finds the `sonar.yaml` this call is about, by path or by
 // group name.
 func resolveConfig(rt *daemon.Runtime, p rpc.GroupsStartParams) (*groups.Config, error) {
 	if p.ConfigPath != nil && strings.TrimSpace(*p.ConfigPath) != "" {
@@ -279,7 +279,7 @@ func resolveConfig(rt *daemon.Runtime, p rpc.GroupsStartParams) (*groups.Config,
 			"`sonar groups` lists the configs this daemon knows; only a group with a config can be started")
 	}
 	return nil, rpc.NewError(rpc.CodeInvalidParams, "name or config_path is required",
-		`send {"name": "my-app"} or {"config_path": "/repo/.sonar.yaml"}`)
+		`send {"name": "my-app"} or {"config_path": "/repo/sonar.yaml"}`)
 }
 
 // detail unwraps an rpc error so a chunk carries the message a user reads

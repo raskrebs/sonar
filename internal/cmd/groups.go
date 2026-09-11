@@ -19,7 +19,7 @@ var groupsCmd = &cobra.Command{
 	Use:   "groups [name]",
 	Short: "List the groups ports resolve to, or inspect one",
 	Long: "Groups are never created explicitly: a port belongs to one because a\n" +
-		"pin, a `sonar start` run, a .sonar.yaml, a Compose project or a git\n" +
+		"pin, a `sonar start` run, a sonar.yaml, a Compose project or a git\n" +
 		"checkout puts it there.",
 	Args: cobra.MaximumNArgs(1),
 	RunE: groupsRun,

@@ -8,7 +8,7 @@ import (
 )
 
 // Attribute runs the resolver over a direct scan. It builds an index from what
-// the scan saw — every `.sonar.yaml` above a process cwd, every Compose
+// the scan saw — every `sonar.yaml` above a process cwd, every Compose
 // project's working directory, plus the config in the caller's own working
 // directory — resolves the group of every port, writes Group, GroupSource and
 // ProjectRoot back onto the scanner rows, and returns the resolved contract

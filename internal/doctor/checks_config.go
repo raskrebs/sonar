@@ -113,7 +113,7 @@ func checkConfigDirWritable(_ context.Context, env *Env) rpc.DoctorCheck {
 	}
 }
 
-// checkProjectConfig looks for this project's `.sonar.yaml`, in the directory
+// checkProjectConfig looks for this project's `sonar.yaml`, in the directory
 // the caller named and then at the git root above it — the two places every
 // other command looks.
 func checkProjectConfig(_ context.Context, env *Env) rpc.DoctorCheck {
@@ -128,13 +128,11 @@ func checkProjectConfig(_ context.Context, env *Env) rpc.DoctorCheck {
 		if base == "" {
 			continue
 		}
-		for _, name := range []string{groups.ConfigName, ".sonar.yml"} {
-			candidate := filepath.Join(base, name)
-			looked = append(looked, candidate)
-			if !exists(candidate) {
-				continue
-			}
-			return projectConfigResult(candidate)
+		if present := groups.FilesIn(base); len(present) > 0 {
+			return projectConfigResult(present[0], present[1:])
+		}
+		for _, name := range groups.ConfigNames() {
+			looked = append(looked, filepath.Join(base, name))
 		}
 		if root == dir {
 			break
@@ -153,7 +151,10 @@ func checkProjectConfig(_ context.Context, env *Env) rpc.DoctorCheck {
 	}
 }
 
-func projectConfigResult(path string) rpc.DoctorCheck {
+// projectConfigResult reports the config sonar reads for a project. shadowed
+// are the other spellings sitting next to it, which sonar ignores; a file under
+// the old dotfile name still works, and the check says how to rename it.
+func projectConfigResult(path string, shadowed []string) rpc.DoctorCheck {
 	cfg, err := groups.Load(path)
 	if err != nil {
 		return rpc.DoctorCheck{
@@ -163,11 +164,35 @@ func projectConfigResult(path string) rpc.DoctorCheck {
 			Fix:     "edit " + path,
 		}
 	}
+	summary := fmt.Sprintf("group %q, %d %s", cfg.Name, len(cfg.Services),
+		plural(len(cfg.Services), "service"))
+	base := filepath.Base(path)
+
+	if len(shadowed) > 0 {
+		names := make([]string, 0, len(shadowed))
+		for _, s := range shadowed {
+			names = append(names, filepath.Base(s))
+		}
+		return rpc.DoctorCheck{
+			Status:  StatusWarn,
+			Summary: fmt.Sprintf("%s, but %s is ignored next to %s", summary, strings.Join(names, " and "), base),
+			Detail:  fmt.Sprintf("sonar reads %s and ignores %s", path, strings.Join(shadowed, ", ")),
+			Fix:     "move anything you still need into " + base + ", then delete " + strings.Join(names, " and "),
+		}
+	}
+	if groups.IsLegacyName(base) {
+		return rpc.DoctorCheck{
+			Status:  StatusWarn,
+			Summary: fmt.Sprintf("%s, under the old name %s", summary, base),
+			Detail:  path + " still works; new projects get " + groups.ConfigName,
+			Fix:     "git mv " + base + " " + groups.ConfigName,
+			Fixable: true,
+		}
+	}
 	return rpc.DoctorCheck{
-		Status: StatusOK,
-		Summary: fmt.Sprintf("group %q, %d %s", cfg.Name, len(cfg.Services),
-			plural(len(cfg.Services), "service")),
-		Detail: path,
+		Status:  StatusOK,
+		Summary: summary,
+		Detail:  path,
 	}
 }
 

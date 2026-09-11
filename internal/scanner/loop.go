@@ -57,7 +57,7 @@ const (
 	// write handler's republish is queued behind the scan that pays it
 	// (contract §44).
 	HealthBudget = 4 * time.Second
-	// ConfiguredHealthBudget is the same ceiling for the `.sonar.yaml` health
+	// ConfiguredHealthBudget is the same ceiling for the `sonar.yaml` health
 	// paths, which are probed on every tick rather than on HealthCadence.
 	ConfiguredHealthBudget = 2 * time.Second
 	// ScanLockBudget bounds how long a handler waits for one of the loop's
@@ -104,7 +104,7 @@ type Options struct {
 	Demand          Demand
 	Publish         Publisher
 
-	// Store persists renames, group pins, known `.sonar.yaml` roots and the
+	// Store persists renames, group pins, known `sonar.yaml` roots and the
 	// port history ring. Nil means the loop scans without a database.
 	Store Store
 
@@ -269,7 +269,7 @@ type Loop struct {
 	local state.Rows
 	// lastPorts is the OS half of the last scan, before attribution. Republish
 	// re-attributes it instead of scanning the machine again, which is what
-	// makes a rename or a `.sonar.yaml` write cost microseconds rather than a
+	// makes a rename or a `sonar.yaml` write cost microseconds rather than a
 	// full scan (contract §44).
 	lastPorts []ports.ListeningPort
 	haveSnap  bool
@@ -707,7 +707,7 @@ func (l *Loop) scanLocked(collect, carry Include) (next, prev state.Snapshot, ch
 
 	// Configured health comes after attribution because it is the groups that
 	// say which port has a `health:` path. It runs on every tick regardless of
-	// `include`: a health path in a `.sonar.yaml` is part of what the service
+	// `include`: a health path in a `sonar.yaml` is part of what the service
 	// is, not an opt-in statistic (step 1A.7). Its budget is what keeps this
 	// short enough to sit inside the ordering gate.
 	probeConfigured(rows, groupRows, l.opts.Probe, ConfiguredHealthBudget)
@@ -990,7 +990,7 @@ func snapshotChanged(prev, next state.Snapshot, withStats bool) bool {
 // were not probed this tick.
 //
 // all says whether to carry every result or only the configured ones. A
-// `.sonar.yaml` health path is state rather than an opt-in statistic
+// `sonar.yaml` health path is state rather than an opt-in statistic
 // (contract §22), so its last verdict is always better than the "unknown" a
 // skipped probe would publish; an opt-in probe is only carried while somebody
 // is still asking for health.
@@ -1130,7 +1130,7 @@ func (l *Loop) Rescan(include Include) (state.Snapshot, error) {
 	return localOnly(snap), err
 }
 
-// Republish makes a store or `.sonar.yaml` write visible on the wire without
+// Republish makes a store or `sonar.yaml` write visible on the wire without
 // scanning the machine (contract §44).
 //
 // The write changed how the ports the daemon already knows are *named and

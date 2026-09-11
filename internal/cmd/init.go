@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,7 +21,7 @@ var (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Write a .sonar.yaml for this project from what is running now",
+	Short: "Write a sonar.yaml for this project from what is running now",
 	Long: "Proposes a group name and one service per listening port whose process\n" +
 		"works inside this repository, and writes it next to .git. Edit and\n" +
 		"commit the result, or name the services yourself with --service.",
@@ -57,7 +56,9 @@ func initRun(cmd *cobra.Command, args []string) error {
 		root = cwd
 		fmt.Fprintf(os.Stderr, "note: %s is not inside a git repository; using it as the project root\n", cwd)
 	}
-	target := filepath.Join(root, groups.ConfigName)
+	// An existing config is written in place whatever its spelling, so --merge
+	// and --force never leave a second file next to a `.sonar.yaml`.
+	target := groups.TargetIn(root)
 	_, statErr := os.Lstat(target)
 	exists := statErr == nil
 

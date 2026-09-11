@@ -93,7 +93,7 @@ Pass exactly one of port, pid, group, session or run_id. There is no "kill every
 
 const stopGroupDescription = `Stop every service in one group: a project's api, web and workers in a single call.
 
-A group is what sonar attributes ports to — a .sonar.yaml project, a Docker Compose project, or a sonar start run. This is the cleanup you want at the end of a task that brought a project up; list_groups shows the names.
+A group is what sonar attributes ports to — a sonar.yaml project, a Docker Compose project, or a sonar start run. This is the cleanup you want at the end of a task that brought a project up; list_groups shows the names.
 
 Kills the process tree of every member. Pass dry_run: true first if you did not start the group yourself.`
 
@@ -169,9 +169,9 @@ Use this instead of a background shell command: nothing here needs & or nohup, a
 // ListGroupsOutput is `{groups: [Group]}`, the shape of groups.list.
 type ListGroupsOutput = rpc.GroupsListResult
 
-const listGroupsDescription = `List the projects sonar knows about: their ports, their status, and the services declared in each .sonar.yaml.
+const listGroupsDescription = `List the projects sonar knows about: their ports, their status, and the services declared in each sonar.yaml.
 
-A group is a project — a directory with a .sonar.yaml, a Docker Compose project, or a repo something was started in. Use it to see what a project is meant to run and what of that is up, and to learn the group names kill and stop_group take.
+A group is a project — a directory with a sonar.yaml, a Docker Compose project, or a repo something was started in. Use it to see what a project is meant to run and what of that is up, and to learn the group names kill and stop_group take.
 
 The services list is what the project declares, with running and port_actual joined from what is listening now, so a service with running: false is one nobody has started.`
 

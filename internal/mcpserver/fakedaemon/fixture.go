@@ -134,12 +134,12 @@ func DefaultPorts() []state.Port {
 }
 
 // DefaultGroups is the fixture's group table: one `sonar start` group with a
-// `.sonar.yaml`, one compose project.
+// `sonar.yaml`, one compose project.
 func DefaultGroups() []state.Group {
 	return []state.Group{
 		{
 			Name: "shop", Source: state.SourceStart,
-			RootDir: strp("/home/dev/shop"), ConfigPath: strp("/home/dev/shop/.sonar.yaml"),
+			RootDir: strp("/home/dev/shop"), ConfigPath: strp("/home/dev/shop/sonar.yaml"),
 			Status: "running", Members: []int{3000, 5173},
 			Services: []state.Service{
 				{

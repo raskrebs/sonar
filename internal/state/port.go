@@ -58,7 +58,7 @@ type Health struct {
 	LatencyMs int64  `json:"latency_ms"`
 	Reason    string `json:"reason,omitempty"`
 
-	// Configured marks a probe the daemon ran because a `.sonar.yaml` service
+	// Configured marks a probe the daemon ran because a `sonar.yaml` service
 	// declares a `health:` path. Such a row is state, not an opt-in statistic,
 	// so it survives the per-subscriber `include` filter. It never goes on the
 	// wire: a client sees the health object either way.

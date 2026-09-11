@@ -13,7 +13,7 @@ import (
 	"github.com/raskrebs/sonar/internal/state"
 )
 
-// The `.sonar.yaml` read/write namespace (contract §13.2) plus the reload that
+// The `sonar.yaml` read/write namespace (contract §13.2) plus the reload that
 // keeps the daemon's long-lived index in step with the disk. `groups.start`
 // lives in internal/daemon/groupstart, because starting a service needs the
 // run registry and this package must not import it (contract §8).
@@ -47,7 +47,7 @@ func handleGroupsConfigSet(_ context.Context, req *Request) (any, error) {
 	path := strings.TrimSpace(p.Path)
 	if path == "" {
 		return nil, rpc.NewError(rpc.CodeInvalidParams, "path is required",
-			`send {"path": "/repo/.sonar.yaml", "services": [{"name": "api", "patch": {"icon": "server"}}]}`)
+			`send {"path": "/repo/sonar.yaml", "services": [{"name": "api", "patch": {"icon": "server"}}]}`)
 	}
 	edit := groups.ConfigEdit{
 		Remove:   p.Remove,
@@ -140,7 +140,7 @@ func handleGroupsReload(_ context.Context, req *Request) (any, error) {
 	for _, b := range bad {
 		problems = append(problems, rpc.ConfigProblem{Path: b.Path, Error: b.Err.Error()})
 	}
-	req.Runtime.Logger.Info("reloaded .sonar.yaml files", "configs", loaded, "invalid", len(problems))
+	req.Runtime.Logger.Info("reloaded sonar.yaml files", "configs", loaded, "invalid", len(problems))
 	republish(req.Runtime)
 	return rpc.GroupsReloadResult{Loaded: loaded, Errors: problems}, nil
 }
@@ -175,15 +175,14 @@ func resolveConfig(rt *Runtime, name, path *string) (*groups.Config, error) {
 			"`sonar groups` lists the configs this daemon knows; `groups.reload` re-reads them")
 	}
 	return nil, rpc.NewError(rpc.CodeInvalidParams, "name or path is required",
-		`send {"name": "my-app"} or {"path": "/repo/.sonar.yaml"}`)
+		`send {"name": "my-app"} or {"path": "/repo/sonar.yaml"}`)
 }
 
-// checkConfigPath refuses to read or write anything that is not a `.sonar.yaml`.
+// checkConfigPath refuses to read or write anything that is not a `sonar.yaml`.
 // The daemon writes files on a client's say-so, so the one filename it will
 // touch is spelled out here rather than left to the caller.
 func checkConfigPath(path string) error {
-	base := filepath.Base(path)
-	if base == groups.ConfigName || base == ".sonar.yml" {
+	if groups.IsConfigName(filepath.Base(path)) {
 		return nil
 	}
 	return rpc.NewError(rpc.CodeInvalidParams,

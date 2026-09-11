@@ -70,7 +70,7 @@ var claimsCmd = &cobra.Command{
 func init() {
 	claimCmd.Flags().StringVar(&claimProject, "project", "", "Project name (default: the git checkout's name)")
 	claimCmd.Flags().StringVar(&claimWorktree, "worktree", "", "Worktree name (default: this checkout's, or main)")
-	claimCmd.Flags().IntVarP(&claimCount, "count", "n", 0, "How many ports to claim (default: the project's worktree_ports from .sonar.yaml, else 1)")
+	claimCmd.Flags().IntVarP(&claimCount, "count", "n", 0, "How many ports to claim (default: the project's worktree_ports from sonar.yaml, else 1)")
 	claimCmd.Flags().StringVar(&claimTTLFlag, "ttl", "24h", "How long the claim lives (e.g. 2h, 30m)")
 	claimCmd.Flags().BoolVar(&claimRelease, "release", false, "Release this key's ports instead of claiming")
 	claimCmd.Flags().BoolVar(&claimListFlag, "list", false, "List live claims instead of claiming")

@@ -409,7 +409,7 @@ type GroupsAssignResult struct {
 // or the name of any of its checkout groups: the rename always applies to the
 // project, so the main checkout's group becomes To and every linked worktree's
 // group becomes `<To>@<worktree>`. A project whose main checkout has a
-// `.sonar.yaml` is renamed by writing `name:` into that file; one without keeps
+// `sonar.yaml` is renamed by writing `name:` into that file; one without keeps
 // the new name in the daemon.
 //
 // Errors: invalid_params for an empty name or a To that is empty or holds `@`,
@@ -432,7 +432,7 @@ type GroupsRenameResult struct {
 	Name string `json:"name"`
 }
 
-// GroupConfig is a `.sonar.yaml` as the protocol carries it: the group name,
+// GroupConfig is a `sonar.yaml` as the protocol carries it: the group name,
 // the services as contract rows, and the extra ports the file claims. It is
 // the `config` of groups.config.get and groups.config.set (contract §13.2).
 type GroupConfig struct {
@@ -456,7 +456,7 @@ type GroupsConfigGetResult struct {
 	Config GroupConfig `json:"config"`
 }
 
-// GroupsConfigSetParams is one atomic edit of a `.sonar.yaml` (contract §13.2,
+// GroupsConfigSetParams is one atomic edit of a `sonar.yaml` (contract §13.2,
 // extended by step 5A.4). The four lists may be combined in a single call and
 // are applied in this order — Remove, Rename, Add, then the Services metadata
 // patches — with each list seeing the file as the previous ones left it.
@@ -533,13 +533,13 @@ type GroupsReloadResult struct {
 	Errors []ConfigProblem `json:"errors"`
 }
 
-// ConfigProblem is one `.sonar.yaml` that could not be used.
+// ConfigProblem is one `sonar.yaml` that could not be used.
 type ConfigProblem struct {
 	Path  string `json:"path"`
 	Error string `json:"error"`
 }
 
-// GroupsInitParams asks for a proposed `.sonar.yaml` for the checkout at
+// GroupsInitParams asks for a proposed `sonar.yaml` for the checkout at
 // RootDir. Write is the contract's opt-in to actually writing it, so the
 // default is a preview; Force is the wire form of `sonar init --force` and
 // overwrites an existing file, while Merge appends into one instead (contract
@@ -644,7 +644,7 @@ type RunsSpawnResult struct {
 // schema has always carried it and every other duration on this wire is in
 // milliseconds. Neither set means DefaultTTL (24h).
 //
-// An omitted Count takes the worktree_ports of the project's `.sonar.yaml`
+// An omitted Count takes the worktree_ports of the project's `sonar.yaml`
 // when the daemon knows one that sets it, and one port otherwise; an explicit
 // Count always wins (step 5A.7).
 type ClaimsAcquireParams struct {

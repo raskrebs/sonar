@@ -155,7 +155,7 @@ func handleRemove(_ context.Context, req *daemon.Request) (any, error) {
 }
 
 // handleCall forwards a method to a host's daemon. Writes are forwarded like
-// any other method: the remote daemon owns its own `.sonar.yaml` under the
+// any other method: the remote daemon owns its own `sonar.yaml` under the
 // same rules as the local one, so there is no read-only mode (remote-hosts
 // spec, decision 3).
 //

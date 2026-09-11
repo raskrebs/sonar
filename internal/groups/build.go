@@ -8,7 +8,7 @@ import (
 )
 
 // Groups builds the group collection from resolved ports. Every group that at
-// least one port resolves to appears, plus every valid `.sonar.yaml` the index
+// least one port resolves to appears, plus every valid `sonar.yaml` the index
 // knows about — a project whose services are all down is still a group, it is
 // just stopped.
 //
@@ -95,7 +95,7 @@ func describeCheckout(g *state.Group, index *Index) {
 	}
 }
 
-// ServiceRow adapts one `.sonar.yaml` service to the published contract row,
+// ServiceRow adapts one `sonar.yaml` service to the published contract row,
 // without any knowledge of what is running. `groups.config.get` returns the
 // file through it, so what the editor reads back is exactly what the resolver
 // publishes.

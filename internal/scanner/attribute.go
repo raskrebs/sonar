@@ -11,7 +11,7 @@ import (
 )
 
 // Store is the slice of the daemon's SQLite store the scan tick uses: the
-// renames and pins it applies, the `.sonar.yaml` roots it remembers and the
+// renames and pins it applies, the `sonar.yaml` roots it remembers and the
 // history ring it appends to. It is an interface so the loop can run without a
 // database — the CLI's direct-scan path and most tests do.
 type Store interface {
@@ -23,7 +23,7 @@ type Store interface {
 	GroupAliases() (map[string]string, error)
 }
 
-// attribution is the per-loop group state: the index of known `.sonar.yaml`
+// attribution is the per-loop group state: the index of known `sonar.yaml`
 // files, which lives as long as the daemon, and the roots already written to
 // the store.
 type attribution struct {
@@ -96,7 +96,7 @@ func (l *Loop) Invalidate() {
 
 // attribute is the group and rename half of a scan tick. It resolves every
 // port's group with the pins loaded from the store, applies the stored renames
-// to display_name, remembers any newly seen `.sonar.yaml` root and builds the
+// to display_name, remembers any newly seen `sonar.yaml` root and builds the
 // group collection.
 func (l *Loop) attribute(pp []ports.ListeningPort) ([]state.Port, []state.Group) {
 	l.attr.mu.Lock()
@@ -124,7 +124,7 @@ func (l *Loop) attribute(pp []ports.ListeningPort) ([]state.Port, []state.Group)
 	return resolved, groups.Groups(resolved, index)
 }
 
-// seedRoots loads the known `.sonar.yaml` roots into the index once, so a
+// seedRoots loads the known `sonar.yaml` roots into the index once, so a
 // project configured before the last restart is a group again immediately,
 // without waiting for one of its processes to be seen.
 func (l *Loop) seedRoots(st Store) {
@@ -134,7 +134,7 @@ func (l *Loop) seedRoots(st Store) {
 	l.attr.seeded = true
 	roots, err := st.Roots()
 	if err != nil {
-		l.opts.Logger.Warn("reading known .sonar.yaml roots", "error", err)
+		l.opts.Logger.Warn("reading known sonar.yaml roots", "error", err)
 		return
 	}
 	for _, root := range roots {
@@ -191,7 +191,7 @@ func (l *Loop) registry() groups.Registry {
 	return groups.PortRuns{}
 }
 
-// rememberRoots persists a `.sonar.yaml` directory the first time it is seen,
+// rememberRoots persists a `sonar.yaml` directory the first time it is seen,
 // so the next daemon start knows about the project without walking the disk.
 func (l *Loop) rememberRoots(st Store, index *groups.Index) {
 	if st == nil {
@@ -203,7 +203,7 @@ func (l *Loop) rememberRoots(st Store, index *groups.Index) {
 		}
 		l.attr.roots[cfg.Dir] = true
 		if err := st.AddRoot(cfg.Dir); err != nil {
-			l.opts.Logger.Warn("recording a .sonar.yaml root", "dir", cfg.Dir, "error", err)
+			l.opts.Logger.Warn("recording a sonar.yaml root", "dir", cfg.Dir, "error", err)
 		}
 	}
 }

@@ -18,7 +18,7 @@ var assignCmd = &cobra.Command{
 	Use:   "assign <port|pid> [group]",
 	Short: "Pin a port to a group by hand",
 	Long: "A pin outranks every other way a group is decided — a `sonar start`\n" +
-		"run, a .sonar.yaml, a Compose project, the git checkout — and is\n" +
+		"run, a sonar.yaml, a Compose project, the git checkout — and is\n" +
 		"remembered per machine until you clear it.",
 	Args:              cobra.RangeArgs(1, 2),
 	ValidArgsFunction: completePort,

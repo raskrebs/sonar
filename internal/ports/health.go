@@ -86,7 +86,7 @@ const MaxProbes = 10
 // budget is the ceiling on the whole round, not on one probe: a machine with
 // forty listeners, ten of them sockets that accept and never answer, used to
 // cost four waves of `timeout` each — seconds of a scan that a `ports.kill`
-// or a `.sonar.yaml` write was queued behind. A probe that would start after
+// or a `sonar.yaml` write was queued behind. A probe that would start after
 // the budget is spent is skipped (its port keeps whatever health the previous
 // tick found, see carryHealth), and one that starts near the end has its own
 // timeout clamped to what is left, so the round costs at most budget.

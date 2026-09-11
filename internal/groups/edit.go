@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// rootKeyOrder is where a top-level key belongs in a `.sonar.yaml`. It is the
+// rootKeyOrder is where a top-level key belongs in a `sonar.yaml`. It is the
 // same idea as keyOrder one level up: a `services:` list this package has to
 // create lands where a hand-written file would put it.
 var rootKeyOrder = []string{"name", "services", "ports", FieldWorktreePorts}
@@ -29,7 +29,7 @@ func SetInt(n int) IntChange { return IntChange{Set: true, Value: &n} }
 // ClearInt is the change that removes the key.
 func ClearInt() IntChange { return IntChange{Set: true} }
 
-// ServiceAdd is a service to append to a `.sonar.yaml`. It is the whole
+// ServiceAdd is a service to append to a `sonar.yaml`. It is the whole
 // editable service, not a patch: an added service does not exist yet, so
 // "absent" and "null" mean the same thing and the zero value of every field is
 // simply left out of the file.
@@ -92,7 +92,7 @@ type ServiceRename struct {
 	To   string `json:"to"`
 }
 
-// ConfigEdit is one atomic set of changes to a `.sonar.yaml`. The four lists
+// ConfigEdit is one atomic set of changes to a `sonar.yaml`. The four lists
 // are applied in the order the fields are declared — remove, rename, add, then
 // the metadata patches — and each one sees the file as the previous ones left
 // it. Nothing is written unless every step succeeds and the result still
@@ -153,7 +153,7 @@ func (e *ServiceConflictError) Error() string {
 	return fmt.Sprintf("service %q already exists in %s", e.Name, e.Path)
 }
 
-// RenderEdit applies an edit to the `.sonar.yaml` at path and returns the bytes
+// RenderEdit applies an edit to the `sonar.yaml` at path and returns the bytes
 // it would write, without writing them. The rewrite goes through the YAML node
 // API rather than marshalling a struct, so comments, key order and the
 // author's own formatting survive (contract §13.2).
@@ -164,7 +164,7 @@ func RenderEdit(path string, edit ConfigEdit) ([]byte, *Config, error) {
 	return render(path, func(abs string, root *yaml.Node) error { return applyEdit(abs, root, edit) })
 }
 
-// SetConfigName writes a new top-level `name:` into a `.sonar.yaml` and returns
+// SetConfigName writes a new top-level `name:` into a `sonar.yaml` and returns
 // the file as it then stands. It goes down the same node-level path as every
 // other edit, so comments and formatting survive, and nothing is written
 // unless the result validates. `groups.rename` renames a file project with it.

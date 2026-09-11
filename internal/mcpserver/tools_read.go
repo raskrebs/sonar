@@ -15,7 +15,7 @@ import (
 
 // ListPortsInput is the argument set of list_ports.
 type ListPortsInput struct {
-	Group       string `json:"group,omitempty" jsonschema:"Only ports in this group. A group is a project (a .sonar.yaml, a compose project or a git root); a sonar start name or run id also selects that run's ports."`
+	Group       string `json:"group,omitempty" jsonschema:"Only ports in this group. A group is a project (a sonar.yaml, a compose project or a git root); a sonar start name or run id also selects that run's ports."`
 	Session     string `json:"session,omitempty" jsonschema:"Only ports started by this agent session id, as reported in each port's session object. A unique prefix of the id works too; list_sessions shows the ids."`
 	Type        string `json:"type,omitempty" jsonschema:"Only ports of one kind: user (a process someone started), docker (a published container port) or system (a service the machine runs)."`
 	IncludeApps bool   `json:"include_apps,omitempty" jsonschema:"Include desktop applications that happen to listen (Chrome, Docker Desktop, Spotlight). Off by default because they are noise for development work."`

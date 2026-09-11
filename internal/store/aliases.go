@@ -3,7 +3,7 @@ package store
 import "fmt"
 
 // Group aliases are project names set with `groups.rename` for a project that
-// has no `.sonar.yaml` to write the name into. They are keyed by the root of
+// has no `sonar.yaml` to write the name into. They are keyed by the root of
 // the project's main checkout, so the main checkout and every linked worktree
 // of it pick the alias up together.
 

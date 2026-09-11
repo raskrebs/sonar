@@ -36,7 +36,7 @@ var doctorCmd = &cobra.Command{
 	Short: "Check that this sonar installation is healthy",
 	Long: "Run every self-check sonar has: the binary on PATH, the config file, the\n" +
 		"daemon and its socket, the database, the MCP/skill/hook integrations, this\n" +
-		"project's " + ".sonar.yaml" + ", docker and the menu bar.\n\n" +
+		"project's " + "sonar.yaml" + ", docker and the menu bar.\n\n" +
 		"Each check is ok, warn, fail or skip. The exit code is 0 unless something\n" +
 		"failed, so `sonar doctor` works in a script. `--fix` applies the repairs\n" +
 		"that are safe to make unattended and runs the checks again.",
@@ -262,6 +262,7 @@ type doctorFix struct {
 func doctorFixes() []doctorFix {
 	fixes := []doctorFix{
 		{id: "config_parses", run: fixBrokenConfig},
+		{id: "project_config", run: fixLegacyConfigName},
 		{id: "daemon_reachable", run: func(ctx context.Context, cmd *cobra.Command) (string, error) {
 			if err := daemonRestartRun(cmd, nil); err != nil {
 				return "", err

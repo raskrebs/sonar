@@ -1,5 +1,5 @@
 // Package store is the daemon's SQLite database: per-machine renames, group
-// pins, the port-event history ring and the set of known .sonar.yaml roots.
+// pins, the port-event history ring and the set of known sonar.yaml roots.
 //
 // The database lives next to config.yaml (~/.config/sonar/sonar.db) and is
 // created on first use. It is driven by modernc.org/sqlite, a pure-Go driver,

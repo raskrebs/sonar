@@ -47,7 +47,7 @@ func claimsManager(rt *Runtime) (*claims.Manager, error) {
 }
 
 // worktreePorts answers claims.Options.DefaultCount: the worktree_ports of the
-// `.sonar.yaml` belonging to a claim's project, or zero when no config says
+// `sonar.yaml` belonging to a claim's project, or zero when no config says
 // (step 5A.7).
 //
 // A claim names its project the way claims.Identity does — the main

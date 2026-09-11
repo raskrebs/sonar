@@ -60,7 +60,7 @@ const portsResourceDescription = `Everything listening on this machine's TCP por
 
 Subscribe to this resource to keep it fresh: the server sends a resources/updated notification when the daemon's port table changes, at most once a second.`
 
-const groupsResourceDescription = `Every group the daemon knows, as JSON: projects with a .sonar.yaml, compose projects, git roots and ` + "`sonar start`" + ` runs, each with its member ports and declared services.
+const groupsResourceDescription = `Every group the daemon knows, as JSON: projects with a sonar.yaml, compose projects, git roots and ` + "`sonar start`" + ` runs, each with its member ports and declared services.
 
 Read this before starting a project's services: it says what the project declares and what part of it is already up.`
 

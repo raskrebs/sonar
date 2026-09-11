@@ -14,7 +14,7 @@ import (
 )
 
 // `sonar groups add|rename|remove` are the CLI half of `groups.config.set`
-// (contract §13.2, step 5A.4). The daemon owns every write to a `.sonar.yaml`,
+// (contract §13.2, step 5A.4). The daemon owns every write to a `sonar.yaml`,
 // so these commands resolve the group to a path and send the edit; nothing here
 // touches the file itself. That is the whole point: the desktop app, the MCP
 // server and the CLI all go through the same handler, so comments and ordering
@@ -154,7 +154,7 @@ func editConfig(cmd *cobra.Command, group string, edit groups.ConfigEdit, done s
 	return nil
 }
 
-// configPathForGroup is the `.sonar.yaml` a group name stands for. The daemon
+// configPathForGroup is the `sonar.yaml` a group name stands for. The daemon
 // answers first, because its index is the authority on which files exist. A
 // project it has never seen a process in is not in that index, so the working
 // directory's own config is the fallback — and only when it carries the name
@@ -172,7 +172,7 @@ func configPathForGroup(ctx context.Context, c *client.Client, name string) (str
 	return "", daemonError(err)
 }
 
-// localConfig is the `.sonar.yaml` at or above the working directory, or nil.
+// localConfig is the `sonar.yaml` at or above the working directory, or nil.
 func localConfig() *groups.Config {
 	wd, err := os.Getwd()
 	if err != nil {
