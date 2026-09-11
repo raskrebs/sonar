@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,9 +35,33 @@ type portMapping struct {
 
 // EnrichPorts queries Docker for running containers and enriches any ports
 // that match Docker-published host ports. Fails silently if Docker is unavailable.
+//
+// It asks Docker inline, bounded by CLITimeout, which suits a one-shot CLI
+// command. The daemon uses a Watcher instead, so no scan waits on Docker.
 func EnrichPorts(pp []ports.ListeningPort) {
 	containers, err := listContainers()
-	if err != nil || len(containers) == 0 {
+	if err != nil {
+		return
+	}
+	enrichFrom(pp, containers)
+}
+
+// publishedPorts is the set of host ports the containers publish.
+func publishedPorts(containers []container) map[int]bool {
+	out := make(map[int]bool)
+	for i := range containers {
+		for _, pm := range containers[i].portMappings {
+			out[pm.hostPort] = true
+		}
+	}
+	return out
+}
+
+// enrichFrom marks every port a container publishes as Docker's and copies the
+// container's name, image and compose labels onto it. It only reads
+// containers, so a Watcher can hand it the cached list without copying.
+func enrichFrom(pp []ports.ListeningPort, containers []container) {
+	if len(containers) == 0 {
 		return
 	}
 
@@ -112,7 +137,12 @@ type apiInspectState struct {
 
 // AllContainerStatsAsEntries returns stats for all containers as ports.DockerStatsEntry map.
 func AllContainerStatsAsEntries() map[string]*ports.DockerStatsEntry {
-	allStats := AllContainerStats()
+	return statsEntries(AllContainerStats())
+}
+
+// statsEntries converts per-container stats to the shape ports.EnrichStats
+// takes. No stats is nil.
+func statsEntries(allStats map[string]*ContainerStats) map[string]*ports.DockerStatsEntry {
 	if len(allStats) == 0 {
 		return nil
 	}
@@ -133,10 +163,18 @@ func AllContainerStatsAsEntries() map[string]*ports.DockerStatsEntry {
 // Engine API via Unix socket. Stats are fetched in parallel (~1s for CPU sampling).
 // Falls back to `docker stats` CLI if the socket is unavailable.
 func AllContainerStats() map[string]*ContainerStats {
-	result := make(map[string]*ContainerStats)
-
 	containers, err := listContainers()
-	if err != nil || len(containers) == 0 {
+	if err != nil {
+		return make(map[string]*ContainerStats)
+	}
+	return statsFor(containers)
+}
+
+// statsFor fetches stats for the given containers, as AllContainerStats does
+// once it has listed them.
+func statsFor(containers []container) map[string]*ContainerStats {
+	result := make(map[string]*ContainerStats)
+	if len(containers) == 0 {
 		return result
 	}
 
@@ -385,15 +423,28 @@ func StopContainer(name string) error {
 	return nil
 }
 
-// listContainers runs `docker ps` and parses the output.
+// psFormat is the `docker ps --format` template parsePS reads.
+const psFormat = "{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Label \"com.docker.compose.service\"}}" +
+	"\t{{.Label \"com.docker.compose.project\"}}\t{{.Label \"com.docker.compose.project.working_dir\"}}"
+
+// listContainers runs `docker ps` under CLITimeout and parses the output.
 func listContainers() ([]container, error) {
-	format := "{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Label \"com.docker.compose.service\"}}" +
-		"\t{{.Label \"com.docker.compose.project\"}}\t{{.Label \"com.docker.compose.project.working_dir\"}}"
-	out, err := output("ps", "--format", format)
+	ctx, cancel := context.WithTimeout(context.Background(), CLITimeout)
+	defer cancel()
+	return listContainersCtx(ctx)
+}
+
+// listContainersCtx runs `docker ps` bound to ctx and parses the output.
+func listContainersCtx(ctx context.Context) ([]container, error) {
+	out, err := command(ctx, "ps", "--format", psFormat).Output()
 	if err != nil {
 		return nil, err
 	}
+	return parsePS(out), nil
+}
 
+// parsePS parses `docker ps --format psFormat` output, one container a line.
+func parsePS(out []byte) []container {
 	var containers []container
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	for scanner.Scan() {
@@ -414,7 +465,7 @@ func listContainers() ([]container, error) {
 		containers = append(containers, c)
 	}
 
-	return containers, nil
+	return containers
 }
 
 // parsePorts parses Docker port strings like "0.0.0.0:3000->80/tcp, 0.0.0.0:3001->443/tcp".
