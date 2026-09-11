@@ -496,3 +496,103 @@ func TestAddsFromRoundTrips(t *testing.T) {
 		t.Errorf("round trip = %+v, want the whole service back", got)
 	}
 }
+
+// TestWorktreePortsAddKeepsCommentsAndOrder: a file with no worktree_ports
+// grows the key at the end, and every other line stays where it was.
+func TestWorktreePortsAddKeepsCommentsAndOrder(t *testing.T) {
+	path := writePatchable(t, oddlyOrdered)
+
+	cfg, err := EditServices(path, ConfigEdit{WorktreePorts: SetInt(4)})
+	if err != nil {
+		t.Fatalf("EditServices: %v", err)
+	}
+	if cfg.WorktreePorts == nil || *cfg.WorktreePorts != 4 {
+		t.Fatalf("returned worktree_ports = %v, want 4", cfg.WorktreePorts)
+	}
+	out := read(t, path)
+	requireComments(t, out)
+	if got := strings.Join(topLevelKeys(out), ","); got != "ports,services,name,worktree_ports" {
+		t.Errorf("top-level keys = %s, want the author's order with worktree_ports last:\n%s", got, out)
+	}
+	if got := serviceNamesInFile(t, path); strings.Join(got, ",") != "db,api,cache" {
+		t.Errorf("services = %v, want them untouched", got)
+	}
+	reloaded, err := Load(path)
+	if err != nil || reloaded.WorktreePorts == nil || *reloaded.WorktreePorts != 4 {
+		t.Fatalf("reloaded worktree_ports = %v, %v; want 4", reloaded, err)
+	}
+}
+
+// TestWorktreePortsReplaceAndRemove: an existing value is edited in place, so
+// its comment and position survive; a clear removes the key and nothing else.
+func TestWorktreePortsReplaceAndRemove(t *testing.T) {
+	path := writePatchable(t, `name: shop
+worktree_ports: 3 # api, web and the worker
+# the services
+services:
+  - name: api
+    port: 8000
+`)
+
+	if _, err := EditServices(path, ConfigEdit{WorktreePorts: SetInt(6)}); err != nil {
+		t.Fatalf("setting worktree_ports: %v", err)
+	}
+	out := read(t, path)
+	if !strings.Contains(out, "worktree_ports: 6 # api, web and the worker") {
+		t.Errorf("the line comment did not stay with the value:\n%s", out)
+	}
+	if got := strings.Join(topLevelKeys(out), ","); got != "name,worktree_ports,services" {
+		t.Errorf("top-level keys = %s, want the key kept where it was", got)
+	}
+
+	cfg, err := EditServices(path, ConfigEdit{WorktreePorts: ClearInt()})
+	if err != nil {
+		t.Fatalf("clearing worktree_ports: %v", err)
+	}
+	if cfg.WorktreePorts != nil {
+		t.Errorf("worktree_ports = %d after a clear, want nil", *cfg.WorktreePorts)
+	}
+	out = read(t, path)
+	if strings.Contains(out, "worktree_ports") {
+		t.Errorf("the key survived a clear:\n%s", out)
+	}
+	if !strings.Contains(out, "# the services") || !strings.Contains(out, "name: api") {
+		t.Errorf("a clear touched more than its own key:\n%s", out)
+	}
+
+	// Clearing a key that is not there changes nothing and is not an error.
+	if _, err := EditServices(path, ConfigEdit{WorktreePorts: ClearInt()}); err != nil {
+		t.Errorf("clearing an absent worktree_ports: %v", err)
+	}
+}
+
+// TestWorktreePortsOutOfRangeLeavesTheFile: a value the file would not
+// validate with is a ConfigError and the file stays byte-identical.
+func TestWorktreePortsOutOfRangeLeavesTheFile(t *testing.T) {
+	path := writePatchable(t, oddlyOrdered)
+	for _, n := range []int{0, MaxWorktreePorts + 1} {
+		_, err := EditServices(path, ConfigEdit{WorktreePorts: SetInt(n)})
+		var bad *ConfigError
+		if !errors.As(err, &bad) {
+			t.Fatalf("worktree_ports %d: err = %v, want a *ConfigError", n, err)
+		}
+		if got := read(t, path); got != oddlyOrdered {
+			t.Fatalf("worktree_ports %d changed the file:\n%s", n, got)
+		}
+	}
+}
+
+func TestWorktreePortsChangeIsNotEmpty(t *testing.T) {
+	for _, c := range []IntChange{SetInt(2), ClearInt()} {
+		e := ConfigEdit{WorktreePorts: c}
+		if e.Empty() {
+			t.Errorf("%+v reads as an empty edit", c)
+		}
+		if len(e.Affected()) != 0 {
+			t.Errorf("affected = %v, want no service names", e.Affected())
+		}
+	}
+	if !(ConfigEdit{}).Empty() {
+		t.Error("the zero edit should be empty")
+	}
+}

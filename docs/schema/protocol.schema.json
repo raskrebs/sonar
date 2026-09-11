@@ -1041,13 +1041,24 @@
             "type": "integer"
           },
           "type": "array"
+        },
+        "worktree_ports": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object",
       "required": [
         "name",
         "services",
-        "ports"
+        "ports",
+        "worktree_ports"
       ]
     },
     "GroupsAssignParams": {
@@ -1182,6 +1193,16 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "worktree_ports": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object",

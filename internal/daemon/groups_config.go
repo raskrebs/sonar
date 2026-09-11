@@ -54,11 +54,13 @@ func handleGroupsConfigSet(_ context.Context, req *Request) (any, error) {
 		Rename:   p.Rename,
 		Add:      p.Add,
 		Services: p.Services,
+
+		WorktreePorts: p.WorktreePortsChange(),
 	}
 	if edit.Empty() {
-		return nil, rpc.NewError(rpc.CodeInvalidParams, "services, add, rename or remove is required",
+		return nil, rpc.NewError(rpc.CodeInvalidParams, "services, add, rename, remove or worktree_ports is required",
 			`send {"path": "…", "add": [{"name": "worker", "port": 9000}]}, or a rename, a remove, `+
-				`or {"services": [{"name": "api", "patch": {...}}]}`)
+				`{"services": [{"name": "api", "patch": {...}}]} or {"worktree_ports": 4}`)
 	}
 	if err := checkEditNames(edit); err != nil {
 		return nil, err
@@ -231,6 +233,11 @@ func configRow(rt *Runtime, cfg *groups.Config) rpc.GroupConfig {
 	}
 	if out.Ports == nil {
 		out.Ports = []int{}
+	}
+	if cfg.WorktreePorts != nil {
+		// A copy, so the row never aliases the index's config.
+		n := *cfg.WorktreePorts
+		out.WorktreePorts = &n
 	}
 	live := liveServices(rt, cfg.Name)
 	for i := range out.Services {

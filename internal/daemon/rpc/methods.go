@@ -412,6 +412,10 @@ type GroupConfig struct {
 	Name     string          `json:"name"`
 	Services []state.Service `json:"services"`
 	Ports    []int           `json:"ports"`
+	// WorktreePorts is the file's worktree_ports: how many ports a claim for
+	// this project takes when it names no count (step 5A.7). Null when the
+	// file has no such key.
+	WorktreePorts *int `json:"worktree_ports" jsonschema:"nullable"`
 }
 
 type GroupsConfigGetParams struct {
@@ -446,6 +450,45 @@ type GroupsConfigSetParams struct {
 	// Remove deletes services and drops them from every other service's
 	// depends_on. An unknown name is `not_found`.
 	Remove []string `json:"remove,omitempty"`
+	// WorktreePorts edits the top-level worktree_ports key (step 5A.7):
+	// omitted leaves it alone, a number (1-100) writes it, and null removes
+	// it. A value out of range is `invalid_config`, like any edit that would
+	// leave the file invalid.
+	WorktreePorts *int `json:"worktree_ports,omitempty" jsonschema:"nullable"`
+
+	// WorktreePortsSent records that worktree_ports was present, null
+	// included, because a pointer alone cannot tell null from absent.
+	// UnmarshalJSON fills it; a Go caller sets it by hand.
+	WorktreePortsSent bool `json:"-" jsonschema:"-"`
+}
+
+// UnmarshalJSON decodes the params and remembers whether worktree_ports was
+// sent at all.
+func (p *GroupsConfigSetParams) UnmarshalJSON(data []byte) error {
+	type plain GroupsConfigSetParams
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	*p = GroupsConfigSetParams(v)
+	_, p.WorktreePortsSent = keys[groups.FieldWorktreePorts]
+	return nil
+}
+
+// WorktreePortsChange is the edit the worktree_ports field asks for.
+func (p GroupsConfigSetParams) WorktreePortsChange() groups.IntChange {
+	switch {
+	case !p.WorktreePortsSent:
+		return groups.IntChange{}
+	case p.WorktreePorts == nil:
+		return groups.ClearInt()
+	default:
+		return groups.SetInt(*p.WorktreePorts)
+	}
 }
 
 // GroupsConfigSetResult is the file after the write. Affected carries the
@@ -573,6 +616,10 @@ type RunsSpawnResult struct {
 // TTLSeconds is the spec's field and wins; TTLMs is kept because the generated
 // schema has always carried it and every other duration on this wire is in
 // milliseconds. Neither set means DefaultTTL (24h).
+//
+// An omitted Count takes the worktree_ports of the project's `.sonar.yaml`
+// when the daemon knows one that sets it, and one port otherwise; an explicit
+// Count always wins (step 5A.7).
 type ClaimsAcquireParams struct {
 	HostParams
 	Project    string `json:"project,omitempty"`

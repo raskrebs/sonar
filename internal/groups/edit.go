@@ -13,7 +13,21 @@ import (
 // rootKeyOrder is where a top-level key belongs in a `.sonar.yaml`. It is the
 // same idea as keyOrder one level up: a `services:` list this package has to
 // create lands where a hand-written file would put it.
-var rootKeyOrder = []string{"name", "services", "ports"}
+var rootKeyOrder = []string{"name", "services", "ports", FieldWorktreePorts}
+
+// IntChange is an edit to one optional integer key. The zero value leaves the
+// key alone; Set with a nil Value removes it; Set with a Value writes it. It
+// is how the wire's three states — absent, null, a number — reach the file.
+type IntChange struct {
+	Set   bool
+	Value *int
+}
+
+// SetInt is the change that writes n.
+func SetInt(n int) IntChange { return IntChange{Set: true, Value: &n} }
+
+// ClearInt is the change that removes the key.
+func ClearInt() IntChange { return IntChange{Set: true} }
 
 // ServiceAdd is a service to append to a `.sonar.yaml`. It is the whole
 // editable service, not a patch: an added service does not exist yet, so
@@ -92,11 +106,15 @@ type ConfigEdit struct {
 	Rename   []ServiceRename `json:"rename,omitempty"`
 	Add      []ServiceAdd    `json:"add,omitempty"`
 	Services []ServiceEdit   `json:"services,omitempty"`
+	// WorktreePorts sets or removes the top-level worktree_ports key. It is
+	// applied last and touches no service, so it never shows in Affected.
+	WorktreePorts IntChange `json:"-"`
 }
 
 // Empty reports whether the edit asks for nothing at all.
 func (e ConfigEdit) Empty() bool {
-	return len(e.Remove) == 0 && len(e.Rename) == 0 && len(e.Add) == 0 && len(e.Services) == 0
+	return len(e.Remove) == 0 && len(e.Rename) == 0 && len(e.Add) == 0 && len(e.Services) == 0 &&
+		!e.WorktreePorts.Set
 }
 
 // Affected is the service names the edit touched, in the order it applied
@@ -222,6 +240,16 @@ func applyEdit(abs string, root *yaml.Node, edit ConfigEdit) error {
 			continue
 		}
 		applyPatch(svc, e.Patch)
+	}
+	if c := edit.WorktreePorts; c.Set {
+		if c.Value == nil {
+			removeKey(root, FieldWorktreePorts)
+		} else {
+			// setKeyIn edits an existing value in place, so a comment beside
+			// `worktree_ports:` stays on that line.
+			setKeyIn(root, FieldWorktreePorts,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(*c.Value)}, rootKeyOrder)
+		}
 	}
 	return nil
 }
