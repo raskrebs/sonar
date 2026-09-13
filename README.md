@@ -232,8 +232,9 @@ so `sonar kill` takes down the whole tree — a dev server with its watchers and
 workers. Ctrl+C is forwarded, and sonar exits with the child's exit code.
 
 `--detach` returns immediately and writes the output to
-`~/.config/sonar/logs/<group>/<name>.log`. `--list` shows what sonar started
-(`--json` for the machine-readable form):
+`~/.config/sonar/logs/<group>/<name>.log`. `--list` shows what sonar started,
+and under it what has since ended — with the exit code, and whether it crashed
+or was stopped (`--json` for the machine-readable form):
 
 ```sh
 sonar start --list
