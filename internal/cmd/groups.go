@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/raskrebs/sonar/internal/daemon/rpc"
 	"github.com/raskrebs/sonar/internal/display"
 	"github.com/raskrebs/sonar/internal/docker"
 	"github.com/raskrebs/sonar/internal/groups"
@@ -31,7 +33,7 @@ func init() {
 }
 
 func groupsRun(cmd *cobra.Command, args []string) error {
-	pp, gg, err := scanGroups()
+	pp, gg, err := groupRows(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -55,6 +57,26 @@ func groupsRun(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	return fmt.Errorf("no group named %q (run `sonar groups` to see them)", args[0])
+}
+
+// groupRows is the groups to render: the daemon's own when one is running, and
+// a direct scan otherwise.
+//
+// The daemon's rows know things a scan from here cannot work out: the port it
+// assigned a `port: auto` service, and how the last run of a service that is
+// down ended. A daemon that cannot be reached is not an error — it is the
+// no-daemon path, which is the one `--no-daemon` asks for outright.
+func groupRows(ctx context.Context) ([]ports.ListeningPort, []state.Group, error) {
+	if !noDaemonFlag {
+		if c, err := dialDaemon(ctx); err == nil {
+			defer c.Close()
+			var snap state.Snapshot
+			if err := c.Call(ctx, "state.snapshot", rpc.StateSnapshotParams{}, &snap); err == nil {
+				return state.ToListeningAll(snap.Ports), snap.Groups, nil
+			}
+		}
+	}
+	return scanGroups()
 }
 
 // scanGroups runs a direct scan, resolves every port's group and builds the

@@ -88,6 +88,9 @@ type Handle struct {
 	PortHint  int
 	StartedAt time.Time
 	LogPath   string
+	// LogOffset is how long LogPath was when this run opened it: the file is
+	// appended to across runs, so this run's output begins here.
+	LogOffset int64
 	Detached  bool
 	Session   state.Session
 
@@ -155,6 +158,10 @@ func Spawn(ctx context.Context, req Request) (*Handle, error) {
 			return nil, err
 		}
 		h.LogPath, h.log = path, f
+		// After any rotation OpenLog did, so a fresh file starts at zero.
+		if info, err := f.Stat(); err == nil {
+			h.LogOffset = info.Size()
+		}
 		cmd.Stdin = nil
 		cmd.Stdout = f
 		cmd.Stderr = f
@@ -303,6 +310,17 @@ type Forwarder struct {
 	mu      sync.Mutex
 	handle  *Handle
 	pending []os.Signal
+	// caught records that an interrupt arrived: the child was stopped by the
+	// user rather than exiting on its own.
+	caught bool
+}
+
+// Interrupted reports whether an interrupt reached this process while it
+// supervised the child, so the child's exit was asked for.
+func (f *Forwarder) Interrupted() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.caught
 }
 
 // CatchSignals starts catching SIGINT and SIGTERM. Nothing is forwarded until
@@ -340,6 +358,7 @@ func (f *Forwarder) run() {
 		select {
 		case sig := <-f.ch:
 			f.mu.Lock()
+			f.caught = true
 			h := f.handle
 			if h == nil {
 				f.pending = append(f.pending, sig)

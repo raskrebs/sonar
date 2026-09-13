@@ -21,6 +21,18 @@ type Service struct {
 	DependsOn   []string `json:"depends_on"`
 	Running     bool     `json:"running"`
 	PortActual  *int     `json:"port_actual" jsonschema:"nullable"`
+	// LastExit is how this service's last run ended, for a service sonar
+	// started that is not running now: "api crashed with exit code 1".
+	LastExit *ServiceExit `json:"last_exit" jsonschema:"nullable"`
+}
+
+// ServiceExit is how a run of a service ended. Reason is exited (code 0),
+// crashed (any other code) or stopped (sonar or the user asked it to stop).
+type ServiceExit struct {
+	Code   int    `json:"code"`
+	Reason string `json:"reason" jsonschema:"enum=exited,enum=crashed,enum=stopped"`
+	At     string `json:"at"`
+	RunID  string `json:"run_id"`
 }
 
 // Group is a set of ports that belong to one project. Members are port

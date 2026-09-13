@@ -391,6 +391,9 @@ type GroupsStartParams struct {
 type GroupsStartResult struct {
 	MutationResult
 	SubscriptionID string `json:"subscription_id"`
+	// StartID is shared by every run this call starts, so the services
+	// brought up together can be told apart from the ones already running.
+	StartID string `json:"start_id,omitempty"`
 }
 
 // GroupsStartChunk is one service's outcome, pushed as it happens: it was
@@ -403,6 +406,9 @@ type GroupsStartChunk struct {
 	// or the one assigned for `port: auto`. Zero for a service with none.
 	Port    int    `json:"port,omitempty"`
 	LogPath string `json:"log_path,omitempty"`
+	// RunID is the run a started service became: the id `runs.list` reports
+	// it under and `ports.kill {run_id}` stops it by.
+	RunID string `json:"run_id,omitempty"`
 	// LogOffset is how long log_path already was before this start. The file
 	// is appended to across runs, so a client following it starts here to
 	// show this run and not the ones before.
@@ -617,10 +623,20 @@ type RunsRegisterResult struct {
 type RunsUnregisterParams struct {
 	HostParams
 	PID int `json:"pid"`
+	// ExitCode is how the run ended, for a caller that waited on it —
+	// `sonar start` without --detach. Absent simply forgets the run.
+	ExitCode *int `json:"exit_code,omitempty"`
+	// Stopped says the run was asked to stop (a Ctrl+C), so a non-zero exit
+	// code is not a crash.
+	Stopped bool `json:"stopped,omitempty"`
 }
 
 type RunsListResult struct {
 	Runs []RunRecord `json:"runs"`
+	// Exited is the runs that have ended, newest first, with their exit code
+	// and the last lines they logged. The daemon keeps a bounded history in
+	// memory, so it starts over when the daemon restarts.
+	Exited []RunRecord `json:"exited"`
 }
 
 type RunRecord struct {
@@ -632,11 +648,29 @@ type RunRecord struct {
 	Cwd       string `json:"cwd"`
 	StartedAt string `json:"started_at"`
 	Ports     []int  `json:"ports"`
-	// PortHint is the port `sonar start --port` said this run would bind.
+	// PortHint is the port `sonar start --port` said this run would bind, or
+	// the one groups.start assigned a `port: auto` service.
 	PortHint *int `json:"port_hint,omitempty"`
+	// URL is where that port answers, for a run that has one.
+	URL string `json:"url,omitempty"`
 	// Status is "starting" while a run with a port hint has not bound it yet,
-	// and "running" otherwise.
+	// "running" otherwise, and "exited" for a run in the exited list.
 	Status string `json:"status"`
+	// ConfigPath, StartID and Origin say where the run came from: the
+	// sonar.yaml it was started from, the `groups.start` that started it with
+	// its siblings, and the client that asked (cli, app, mcp).
+	ConfigPath string `json:"config_path,omitempty"`
+	StartID    string `json:"start_id,omitempty"`
+	Origin     string `json:"origin,omitempty"`
+	// LogPath is the file a detached run's output goes to.
+	LogPath string `json:"log_path,omitempty"`
+	// ExitCode, Reason, ExitedAt and LastLines are filled in for a run that
+	// has ended. Reason is exited (code 0), crashed (any other code) or
+	// stopped (sonar or the user asked it to stop).
+	ExitCode  *int     `json:"exit_code,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
+	ExitedAt  string   `json:"exited_at,omitempty"`
+	LastLines []string `json:"last_lines,omitempty"`
 }
 
 type RunsSpawnParams struct {

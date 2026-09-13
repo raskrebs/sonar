@@ -24,12 +24,22 @@ type PortHints interface {
 	PortHint(group, service string) (int, bool)
 }
 
-// GroupsWith is Groups with the ports sonar assigned the services it started.
-// hints may be nil.
-func GroupsWith(pp []state.Port, index *Index, hints PortHints) []state.Group {
+// ExitHistory is the other optional half of Registry: it remembers how the
+// runs sonar started ended, so a service that is down can say it crashed
+// rather than only that it is not running.
+type ExitHistory interface {
+	LastExit(group, service string) (state.ServiceExit, bool)
+}
+
+// GroupsWith is Groups with what the run registry knows beyond attribution:
+// the ports it assigned (PortHints) and how its runs ended (ExitHistory). reg
+// may be nil, and may implement either, both or neither.
+func GroupsWith(pp []state.Port, index *Index, reg Registry) []state.Group {
 	if index == nil {
 		index = NewIndex()
 	}
+	hints, _ := reg.(PortHints)
+	exits, _ := reg.(ExitHistory)
 	byName := map[string]*state.Group{}
 	members := map[string][]state.Port{}
 
@@ -72,7 +82,7 @@ func GroupsWith(pp []state.Port, index *Index, hints PortHints) []state.Group {
 		if rank(state.SourceFile) > rank(g.Source) {
 			g.Source = state.SourceFile
 		}
-		g.Services = services(cfg, name, members[name], hints)
+		g.Services = services(cfg, name, members[name], hints, exits)
 	}
 
 	out := make([]state.Group, 0, len(byName))
@@ -156,7 +166,7 @@ func optional(s string) *string {
 // listening in that group: by declared port first, then by the port sonar
 // assigned a `port: auto` service, then by the name the scanner shows for the
 // port.
-func services(cfg *Config, group string, member []state.Port, hints PortHints) []state.Service {
+func services(cfg *Config, group string, member []state.Port, hints PortHints, exits ExitHistory) []state.Service {
 	out := make([]state.Service, 0, len(cfg.Services))
 	for _, s := range cfg.Services {
 		svc := ServiceRow(s)
@@ -170,6 +180,13 @@ func services(cfg *Config, group string, member []state.Port, hints PortHints) [
 				actual := p.Port
 				svc.Running, svc.PortActual = true, &actual
 				break
+			}
+		}
+		// A service that is down says how its last run ended, when sonar was
+		// the one that started it.
+		if !svc.Running && exits != nil {
+			if e, ok := exits.LastExit(group, s.Name); ok {
+				svc.LastExit = &e
 			}
 		}
 		out = append(out, svc)

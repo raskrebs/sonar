@@ -53,6 +53,11 @@ func handlePortsKill(ctx context.Context, req *Request) (any, error) {
 		DryRun:   p.DryRun,
 		Ports:    killerRows(snap),
 	}
+	if !opts.DryRun {
+		// Marked before the signal: a run that goes down because sonar asked
+		// it to has exited, not crashed.
+		req.Runtime.Runs().Stopping(runRoots(snap, targets))
+	}
 	rows := killer.KillPorts(ctx, targets, opts)
 	afterKill(req, opts.DryRun)
 	return killEnvelope(rows), nil

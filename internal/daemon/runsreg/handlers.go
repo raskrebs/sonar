@@ -111,6 +111,7 @@ func handleRegister(_ context.Context, req *daemon.Request) (any, error) {
 	if p.Session != nil && p.Session.ID != "" {
 		rec.Session = *p.Session
 	}
+	rec.Origin = Origin(req)
 
 	rec = Default.Register(rec)
 	rememberSession(req.Runtime, rec.Session)
@@ -129,7 +130,13 @@ func handleUnregister(_ context.Context, req *daemon.Request) (any, error) {
 	if p.PID <= 0 {
 		return nil, rpc.NewError(rpc.CodeInvalidParams, "pid is required", `send {"pid": <pid>}`)
 	}
-	Default.Unregister(p.PID)
+	// A caller that waited on the run says how it ended, and the run joins the
+	// exit history; one that only lets go of it is simply forgotten.
+	if p.ExitCode != nil {
+		Default.Exited(p.PID, *p.ExitCode, p.Stopped)
+	} else {
+		Default.Unregister(p.PID)
+	}
 	req.Runtime.Scanner.Wake()
 	// Unregistering a run nobody registered is not an error: `sonar start`
 	// always cleans up, whether or not the daemon saw the registration.
@@ -143,7 +150,12 @@ func handleList(_ context.Context, req *daemon.Request) (any, error) {
 	for _, rec := range records {
 		rows = append(rows, row(rec, snap))
 	}
-	return rpc.RunsListResult{Runs: rows}, nil
+	exits := Default.Exits()
+	exited := make([]rpc.RunRecord, 0, len(exits))
+	for _, e := range exits {
+		exited = append(exited, exitRow(e))
+	}
+	return rpc.RunsListResult{Runs: rows, Exited: exited}, nil
 }
 
 func handleSpawn(ctx context.Context, req *daemon.Request) (any, error) {
@@ -189,7 +201,7 @@ func handleSpawn(ctx context.Context, req *daemon.Request) (any, error) {
 		PortHint: hint,
 		Session:  session,
 		Detach:   true,
-	})
+	}, Meta{Origin: Origin(req)})
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +223,7 @@ func handleSpawn(ctx context.Context, req *daemon.Request) (any, error) {
 //
 // The caller has already resolved the group, the name and the working
 // directory; CheckCwd is the home-directory guard.
-func Spawn(ctx context.Context, rt *daemon.Runtime, req spawn.Request) (*spawn.Handle, error) {
+func Spawn(ctx context.Context, rt *daemon.Runtime, req spawn.Request, meta Meta) (*spawn.Handle, error) {
 	req.Detach = true
 	h, err := spawn.Spawn(ctx, req)
 	if err != nil {
@@ -220,16 +232,21 @@ func Spawn(ctx context.Context, rt *daemon.Runtime, req spawn.Request) (*spawn.H
 	}
 
 	Default.Register(Record{
-		ID:        h.ID,
-		PID:       h.PID,
-		PPID:      h.PPID,
-		Group:     h.Group,
-		Name:      h.Name,
-		Cmd:       h.Cmd,
-		Cwd:       h.Cwd,
-		PortHint:  h.PortHint,
-		StartedAt: h.StartedAt,
-		Session:   h.Session,
+		ID:         h.ID,
+		PID:        h.PID,
+		PPID:       h.PPID,
+		Group:      h.Group,
+		Name:       h.Name,
+		Cmd:        h.Cmd,
+		Cwd:        h.Cwd,
+		PortHint:   h.PortHint,
+		StartedAt:  h.StartedAt,
+		Session:    h.Session,
+		ConfigPath: meta.ConfigPath,
+		StartID:    meta.StartID,
+		Origin:     meta.Origin,
+		LogPath:    h.LogPath,
+		LogOffset:  h.LogOffset,
 	})
 	rememberSession(rt, h.Session)
 	rt.Logger.Info("spawned a run",
@@ -240,8 +257,9 @@ func Spawn(ctx context.Context, rt *daemon.Runtime, req spawn.Request) (*spawn.H
 	// alive to every liveness test, so the run would never be pruned.
 	go func(rt *daemon.Runtime, h *spawn.Handle) {
 		code, err := h.Wait()
-		Default.Unregister(h.PID)
-		rt.Logger.Info("run exited", "id", h.ID, "pid", h.PID, "code", code, "error", err)
+		e, _ := Default.Exited(h.PID, code, false)
+		rt.Logger.Info("run exited",
+			"id", h.ID, "pid", h.PID, "code", code, "reason", e.Reason, "error", err)
 		rt.Scanner.Wake()
 	}(rt, h)
 	return h, nil
@@ -284,19 +302,24 @@ func CheckCwd(cwd string, allowOutsideHome bool) (string, error) {
 // and whether it is still coming up.
 func row(rec Record, snap state.Snapshot) rpc.RunRecord {
 	out := rpc.RunRecord{
-		ID:        rec.ID,
-		PID:       rec.PID,
-		Group:     rec.Group,
-		Name:      rec.Name,
-		Cmd:       rec.Cmd,
-		Cwd:       rec.Cwd,
-		StartedAt: rec.StartedAt.Format(time.RFC3339),
-		Ports:     portsOf(rec, snap),
-		Status:    "running",
+		ID:         rec.ID,
+		PID:        rec.PID,
+		Group:      rec.Group,
+		Name:       rec.Name,
+		Cmd:        rec.Cmd,
+		Cwd:        rec.Cwd,
+		StartedAt:  rec.StartedAt.Format(time.RFC3339),
+		Ports:      portsOf(rec, snap),
+		Status:     "running",
+		ConfigPath: rec.ConfigPath,
+		StartID:    rec.StartID,
+		Origin:     rec.Origin,
+		LogPath:    rec.LogPath,
 	}
 	if rec.PortHint > 0 {
 		hint := rec.PortHint
 		out.PortHint = &hint
+		out.URL = serviceURL(hint)
 		if !contains(out.Ports, hint) {
 			// The expected port is not listening yet: the desktop and
 			// `daemon.status` show the run as coming up rather than missing.

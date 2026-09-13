@@ -123,9 +123,9 @@ func (l *Loop) attribute(pp []ports.ListeningPort) ([]state.Port, []state.Group)
 	l.rememberRoots(st, index)
 
 	// A registry that knows the ports it assigned lets a `port: auto` service
-	// join its listener even when that listener is not in its process tree.
-	hints, _ := reg.(groups.PortHints)
-	return resolved, groups.GroupsWith(resolved, index, hints)
+	// join its listener even when that listener is not in its process tree,
+	// and one that remembers exits lets a service that is down say it crashed.
+	return resolved, groups.GroupsWith(resolved, index, reg)
 }
 
 // seedRoots loads the known `sonar.yaml` roots into the index once, so a

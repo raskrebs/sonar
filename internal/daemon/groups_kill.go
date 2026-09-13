@@ -66,6 +66,9 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 	}
 	var rows []state.KillResult
 	if len(targets) > 0 {
+		if !opts.DryRun {
+			req.Runtime.Runs().Stopping(runRoots(snap, targets))
+		}
 		rows = killer.KillPorts(ctx, targets, opts)
 	}
 	if p.Release && !p.DryRun {
@@ -79,6 +82,7 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 		if len(pidTargets) > 0 {
 			tree := opts
 			tree.Tree = true
+			req.Runtime.Runs().Stopping(runRoots(snap, pidTargets))
 			rows = append(rows, killer.KillPorts(ctx, pidTargets, tree)...)
 		}
 	}
@@ -94,6 +98,37 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 		env.Released = n
 	}
 	return env, nil
+}
+
+// runRoots lists the runs a kill is about to stop: every target given by pid,
+// and the run that owns each targeted port or run id. The registry marks them
+// so their exit is recorded as stopped rather than as a crash.
+func runRoots(snap state.Snapshot, targets []killer.Target) []int {
+	var out []int
+	for _, t := range targets {
+		if t.PID > 0 {
+			out = append(out, t.PID)
+			continue
+		}
+		for _, p := range snap.Ports {
+			if p.Run == nil || p.Run.RootPID <= 0 {
+				continue
+			}
+			if t.RunID != "" && p.Run.ID != t.RunID {
+				continue
+			}
+			if t.RunID == "" {
+				if p.Port != t.Port {
+					continue
+				}
+				if t.BindAddress != "" && p.BindAddress != t.BindAddress {
+					continue
+				}
+			}
+			out = append(out, p.Run.RootPID)
+		}
+	}
+	return out
 }
 
 // killGroupName is the group a groups.kill call is about: the name it sent, or

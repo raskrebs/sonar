@@ -181,7 +181,7 @@ func followProject(c *client.Client, stream *client.Stream, cfg *groups.Config, 
 				}
 				if !runs.PIDAlive(s.PID) {
 					alive[s.PID] = false
-					out.println(prefix(s.Service) + display.Dim("exited"))
+					out.println(prefix(s.Service) + exitNote(c, s.PID))
 					continue
 				}
 				left++

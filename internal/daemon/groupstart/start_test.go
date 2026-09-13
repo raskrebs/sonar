@@ -483,6 +483,64 @@ func collectWatching(t *testing.T, s *client.Stream, w *watchList) ([]rpc.Groups
 	}
 }
 
+// TestAnExitIsKeptWithWhereTheRunCameFrom: a service that exits on its own is
+// kept among the runs that ended, with its code, the last lines it logged, and
+// the config, the start and the client it came from.
+func TestAnExitIsKeptWithWhereTheRunCameFrom(t *testing.T) {
+	skipOnWindows(t)
+	dir := isolate(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	path := writeConfig(t, dir, "name: exittest\nservices:\n  - name: job\n    cmd: sh -c 'echo boom; exit 3'\n")
+	c := startDaemon(t, ctx, dir, nil)
+
+	var start rpc.GroupsStartResult
+	s, err := c.Stream(ctx, "groups.start", rpc.GroupsStartParams{ConfigPath: &path}, &start)
+	if err != nil {
+		t.Fatalf("groups.start: %v", err)
+	}
+	defer s.Close()
+	chunks, end := collect(t, s)
+	if len(end.Started) != 1 || len(chunks) != 1 || chunks[0].RunID == "" {
+		t.Fatalf("end = %+v, chunks = %+v", end, chunks)
+	}
+	if start.StartID == "" {
+		t.Fatal("groups.start did not report a start id")
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var list rpc.RunsListResult
+		if err := c.Call(ctx, "runs.list", rpc.Empty{}, &list); err != nil {
+			t.Fatalf("runs.list: %v", err)
+		}
+		for _, r := range list.Exited {
+			if r.ID != chunks[0].RunID {
+				continue
+			}
+			if r.ExitCode == nil || *r.ExitCode != 3 || r.Reason != "crashed" {
+				t.Errorf("exit = %+v, want exit code 3 and a crash", r)
+			}
+			if len(r.LastLines) == 0 || r.LastLines[len(r.LastLines)-1] != "boom" {
+				t.Errorf("last lines = %q, want what the service printed", r.LastLines)
+			}
+			if r.ConfigPath != groups.Canonical(path) || r.StartID != start.StartID || r.Origin != "cli" {
+				t.Errorf("run = %+v, want it to name its config, start and client", r)
+			}
+			if r.Status != "exited" {
+				t.Errorf("status = %q, want exited", r.Status)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the exit never reached runs.list: %+v", list)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // TestSkipsServicesThatAreAlreadyRunning: `sonar up` is safe to run twice.
 func TestSkipsServicesThatAreAlreadyRunning(t *testing.T) {
 	skipOnWindows(t)

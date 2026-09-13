@@ -347,7 +347,8 @@ func (a *Actions) runsSpawn(raw json.RawMessage) (any, error) {
 }
 
 func (a *Actions) runsList(json.RawMessage) (any, error) {
-	return rpc.RunsListResult{Runs: a.Runs()}, nil
+	// Exited is always an array on the wire, even when nothing has ended.
+	return rpc.RunsListResult{Runs: a.Runs(), Exited: []rpc.RunRecord{}}, nil
 }
 
 // ------------------------------------------------------------------- wait ---

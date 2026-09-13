@@ -39,10 +39,24 @@ type Record struct {
 	Cwd       string
 	PortHint  int
 	StartedAt time.Time
+	// ConfigPath, StartID and Origin say where a run came from: the
+	// sonar.yaml it was started from, the groups.start that started it with
+	// its siblings, and the client that asked for it (cli, app, mcp).
+	ConfigPath string
+	StartID    string
+	Origin     string
+	// LogPath and LogOffset are where a detached run's output goes and where
+	// this run's part of the file begins; its last lines are kept on exit.
+	LogPath   string
+	LogOffset int64
 	// Session is the agent session that asked for this run, or the zero value
 	// when nothing did (spec 2 §3). It travels with the run so every port the
 	// run opens can be stamped with it.
 	Session state.Session
+
+	// stopping is set when sonar is about to stop this run, so its exit is
+	// recorded as stopped rather than a crash.
+	stopping bool
 }
 
 // Registry holds the live runs. The zero value is not usable; call New.
@@ -61,6 +75,10 @@ type Registry struct {
 	parents   map[int]int
 	parentsAt time.Time
 	now       func() time.Time
+
+	// exits is the history of runs that ended, oldest first, capped at
+	// maxExits. It lives in memory: a daemon restart starts it over.
+	exits []Exit
 }
 
 // New returns an empty registry that mirrors to runs.json.
@@ -121,6 +139,11 @@ func (r *Registry) RenameGroups(renames map[string]string) int {
 		rec.Group = next
 		r.runs[pid] = rec
 		moved = append(moved, rec)
+	}
+	for i := range r.exits {
+		if next, ok := renames[r.exits[i].Group]; ok && next != "" {
+			r.exits[i].Group = next
+		}
 	}
 	r.mu.Unlock()
 	for _, rec := range moved {

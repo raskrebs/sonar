@@ -139,10 +139,12 @@ func startAttached(cmd *cobra.Command, argv []string, cwd string, res spawn.Reso
 	if err != nil {
 		return fmt.Errorf("running %q: %w", argv[0], err)
 	}
+	// The daemon keeps how it ended, and knows a Ctrl+C we forwarded is not a
+	// crash however the child chose to exit.
+	finishRun(h.PID, daemonKnows, code, fwd.Interrupted())
 	if code != 0 {
 		// Mirror the child's exit code without cobra printing usage over it.
 		cmd.SilenceUsage, cmd.SilenceErrors = true, true
-		unregisterRun(h.PID, daemonKnows)
 		fwd.Stop()
 		os.Exit(code)
 	}
@@ -280,6 +282,25 @@ func unregisterRun(pid int, daemonKnows bool) {
 	_ = runs.Remove(pid)
 }
 
+// finishRun reports how an attached run ended, so the daemon keeps it among
+// the runs that exited. Without a daemon there is nowhere to keep it and the
+// runs.json entry is simply removed.
+func finishRun(pid int, daemonKnows bool, code int, stopped bool) {
+	if daemonKnows {
+		ctx, cancel := context.WithTimeout(context.Background(), registerTimeout)
+		defer cancel()
+		if c, err := connectRunningDaemon(ctx); err == nil {
+			defer c.Close()
+			var out rpc.OKResult
+			params := rpc.RunsUnregisterParams{PID: pid, ExitCode: &code, Stopped: stopped}
+			if err := c.Call(ctx, "runs.unregister", params, &out); err == nil {
+				return
+			}
+		}
+	}
+	_ = runs.Remove(pid)
+}
+
 // fallbackEntry is the runs.json row for a run the daemon never saw. Tag holds
 // the group so an older `sonar list` still attributes the ports.
 func fallbackEntry(h *spawn.Handle) runs.Entry {
@@ -323,23 +344,29 @@ func listRuns(ctx context.Context) error {
 		return rows[i].Group < rows[j].Group
 	})
 
+	exited := recentExits(ctx)
 	if startJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{"runs": rows})
+		return enc.Encode(map[string]any{"runs": rows, "exited": exited})
 	}
-	if len(rows) == 0 {
+	if len(rows) == 0 && len(exited) == 0 {
 		fmt.Println("No runs started by sonar.")
 		return nil
 	}
 
-	fmt.Printf("%-6s %-10s %-18s %-14s %-9s %-12s %s\n",
-		display.Bold("PID"), display.Bold("ID"), display.Bold("GROUP"),
-		display.Bold("NAME"), display.Bold("STATUS"), display.Bold("PORTS"), display.Bold("CMD"))
-	for _, r := range rows {
-		fmt.Printf("%-6d %-10s %-18s %-14s %-9s %-12s %s\n",
-			r.PID, r.ID, display.Cyan(r.Group), r.Name, r.Status, portList(r.Ports), r.Cmd)
+	if len(rows) == 0 {
+		fmt.Println("Nothing sonar started is running.")
+	} else {
+		fmt.Printf("%-6s %-10s %-18s %-14s %-9s %-12s %s\n",
+			display.Bold("PID"), display.Bold("ID"), display.Bold("GROUP"),
+			display.Bold("NAME"), display.Bold("STATUS"), display.Bold("PORTS"), display.Bold("CMD"))
+		for _, r := range rows {
+			fmt.Printf("%-6d %-10s %-18s %-14s %-9s %-12s %s\n",
+				r.PID, r.ID, display.Cyan(r.Group), r.Name, r.Status, portList(r.Ports), r.Cmd)
+		}
 	}
+	printExits(exited)
 	return nil
 }
 

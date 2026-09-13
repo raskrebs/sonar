@@ -51,6 +51,9 @@ type RunRegistry interface {
 	Prune()
 	// GroupPIDs lists the live runs recorded under a group.
 	GroupPIDs(group string) []int
+	// Stopping marks runs sonar is about to stop, so their exit is recorded
+	// as stopped rather than as a crash.
+	Stopping(pids []int)
 }
 
 // noRuns is the stand-in used before a registry is installed, so callers never
@@ -59,6 +62,7 @@ type noRuns struct{}
 
 func (noRuns) Run(state.Port) (state.Run, bool) { return state.Run{}, false }
 func (noRuns) Prune()                           {}
+func (noRuns) Stopping([]int)                   {}
 func (noRuns) GroupPIDs(string) []int           { return nil }
 
 // SetRuns installs the run registry. Called once, from an OnStart hook.

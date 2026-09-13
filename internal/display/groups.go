@@ -114,6 +114,15 @@ func RenderGroup(w io.Writer, g state.Group, pp []ports.ListeningPort) {
 			want = "auto"
 		}
 		status := Dim("stopped")
+		if s.LastExit != nil {
+			// A service sonar started and that is down says how it ended.
+			switch s.LastExit.Reason {
+			case "crashed":
+				status = Red(fmt.Sprintf("crashed (exit %d)", s.LastExit.Code))
+			case "stopped":
+				status = Dim("stopped by sonar")
+			}
+		}
 		if s.Running {
 			status = Green("running")
 			if s.PortActual != nil && (s.Port == nil || *s.PortActual != *s.Port) {

@@ -32,6 +32,8 @@ func (f *fakeRuns) Run(p state.Port) (state.Run, bool) {
 
 func (f *fakeRuns) Prune() {}
 
+func (f *fakeRuns) Stopping([]int) {}
+
 func (f *fakeRuns) GroupPIDs(group string) []int {
 	var out []int
 	for _, l := range f.live {
