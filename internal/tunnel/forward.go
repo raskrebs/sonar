@@ -44,11 +44,16 @@ func (c *client) forward(ctx context.Context, stream *yamux.Stream) {
 		entry.Path = req.URL.RequestURI()
 	}
 
+	// Which service answers this path. For a share of one service this is
+	// always the same address; for a shared project it is whichever service
+	// the path belongs to.
+	target := c.target(req)
+
 	dialer := &net.Dialer{Timeout: c.cfg.DialTimeout}
-	local, err := dialer.DialContext(ctx, "tcp", c.local)
+	local, err := dialer.DialContext(ctx, "tcp", target.Addr)
 	if err != nil {
-		c.log.Warn("the shared app did not answer", "addr", c.local, "err", err)
-		writeGatewayError(stream, c.local)
+		c.log.Warn("the shared app did not answer", "addr", target.Addr, "err", err)
+		writeGatewayError(stream, target.Addr)
 		entry.Err = err
 		c.logRequest(entry, started)
 		return
@@ -56,7 +61,7 @@ func (c *client) forward(ctx context.Context, stream *yamux.Stream) {
 
 	upgrade := isUpgrade(req)
 	entry.Upgrade = upgrade
-	c.rewrite(req)
+	c.rewrite(req, target)
 	if !upgrade {
 		// One exchange per connection, so the app closes when it is done and
 		// the copy below ends on its own.
@@ -115,6 +120,22 @@ func (c *client) logRequest(entry RequestLog, started time.Time) {
 	c.cfg.OnRequest(entry)
 }
 
+// target is which service answers this request, and what to ask it for.
+//
+// Falls back to the single shared address whenever there is no project table
+// or it declines to place the path, so a share of one service takes exactly
+// the path it always did.
+func (c *client) target(req *http.Request) Target {
+	if c.cfg.Route == nil || req.URL == nil {
+		return Target{Addr: c.local}
+	}
+	t := c.cfg.Route(req.URL.Path)
+	if t.Addr == "" {
+		t.Addr = c.local
+	}
+	return t
+}
+
 // rewrite makes the request look local.
 //
 // Host becomes the address the app is listening on, because a dev server
@@ -125,7 +146,7 @@ func (c *client) logRequest(entry RequestLog, started time.Time) {
 //
 // The X-Forwarded-* values the relay set are authoritative and are left alone;
 // these are only filled in when a relay did not set them.
-func (c *client) rewrite(req *http.Request) {
+func (c *client) rewrite(req *http.Request, target Target) {
 	if req.Header.Get("X-Forwarded-Host") == "" && req.Host != "" {
 		req.Header.Set("X-Forwarded-Host", req.Host)
 	}
@@ -133,10 +154,24 @@ func (c *client) rewrite(req *http.Request) {
 		// A share is only reachable over TLS from outside.
 		req.Header.Set("X-Forwarded-Proto", "https")
 	}
-	req.Host = c.local
+	req.Host = target.Addr
 	if req.URL != nil {
 		req.URL.Scheme = "http"
-		req.URL.Host = c.local
+		req.URL.Host = target.Addr
+	}
+	// A service mounted under a path is asked for the path it would see on
+	// localhost, and told where it really sits so that anything building an
+	// absolute URL gets it right.
+	if target.Prefix != "" && req.URL != nil {
+		req.Header.Set("X-Forwarded-Prefix", target.Prefix)
+		req.URL.Path = target.Path
+		if req.URL.RawPath != "" {
+			raw := strings.TrimPrefix(req.URL.RawPath, target.Prefix)
+			if raw == "" {
+				raw = "/"
+			}
+			req.URL.RawPath = raw
+		}
 	}
 	// Without this, Request.Write invents a Go user agent for a request that
 	// deliberately had none.

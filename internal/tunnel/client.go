@@ -59,6 +59,17 @@ var (
 	ErrServiceGone = errors.New("tunnel: the shared service stopped")
 )
 
+// Target is where one request goes: the local address that answers it, the
+// path to ask for, and the prefix that was taken off on the way.
+//
+// Prefix is empty unless something was stripped, which makes it both the
+// value for X-Forwarded-Prefix and the record of whether the path changed.
+type Target struct {
+	Addr   string
+	Path   string
+	Prefix string
+}
+
 // Config is one share: where the relay is, what to prove, and what to serve.
 type Config struct {
 	// RelayURL is the relay's base URL ("https://relay.trysonar.dev") or the
@@ -80,6 +91,17 @@ type Config struct {
 	Share string
 	// LocalPort is the port on this machine being shared.
 	LocalPort int
+	// Route places one request inside a shared project: which service answers
+	// it, and what to ask that service for. Nil is a share of one service,
+	// where every request goes to LocalPort.
+	//
+	// A function rather than a table, on purpose. The relay is never told the
+	// shape of a project — that is the property which stops it steering this
+	// daemon anywhere — and there is no reason for the tunnel to learn it
+	// either. It asks where a path goes and dials there; internal/share owns
+	// the answer.
+	Route func(path string) Target
+
 	// LocalHost is what to dial it on. Empty means "localhost", which covers
 	// the dev server that bound ::1 and the one that bound 127.0.0.1.
 	LocalHost string

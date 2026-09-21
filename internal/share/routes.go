@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/raskrebs/sonar/internal/state"
+	"github.com/raskrebs/sonar/internal/tunnel"
 )
 
 // Where each service of a shared project sits under one hostname.
@@ -230,4 +231,26 @@ func servicePort(svc state.Service) int {
 		return *svc.Port
 	}
 	return 0
+}
+
+// router is the table as the tunnel asks for it: a function from a request
+// path to where that request goes.
+//
+// The tunnel is handed this rather than the table itself, so that nothing
+// below internal/share learns the shape of a project.
+func (r Routes) router() func(string) tunnel.Target {
+	if len(r) == 0 {
+		return nil
+	}
+	return func(path string) tunnel.Target {
+		route, forward := r.Match(path)
+		t := tunnel.Target{Addr: route.Addr, Path: forward}
+		if route.Strip && route.Prefix != "/" {
+			// Only what was actually taken off. The tunnel reads a non-empty
+			// prefix as "the path changed", and tells the service where it
+			// really sits.
+			t.Prefix = route.Prefix
+		}
+		return t
+	}
 }
