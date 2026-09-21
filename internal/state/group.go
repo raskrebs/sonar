@@ -19,8 +19,15 @@ type Service struct {
 	Icon        *string  `json:"icon" jsonschema:"nullable"`
 	Color       *string  `json:"color" jsonschema:"nullable"`
 	DependsOn   []string `json:"depends_on"`
-	Running     bool     `json:"running"`
-	PortActual  *int     `json:"port_actual" jsonschema:"nullable"`
+	// Path and Strip are where this service sits when the whole project is
+	// shared under one hostname, and whether that prefix is taken off before
+	// the service sees the request. Both are null unless sonar.yaml says
+	// otherwise; the defaults are in internal/share/routes.go, which is the
+	// only thing that reads them.
+	Path       *string `json:"path" jsonschema:"nullable"`
+	Strip      *bool   `json:"strip" jsonschema:"nullable"`
+	Running    bool    `json:"running"`
+	PortActual *int    `json:"port_actual" jsonschema:"nullable"`
 	// LastExit is how this service's last run ended, for a service sonar
 	// started that is not running now: "api crashed with exit code 1".
 	LastExit *ServiceExit `json:"last_exit" jsonschema:"nullable"`

@@ -3287,6 +3287,26 @@
           },
           "type": "array"
         },
+        "path": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strip": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "running": {
           "type": "boolean"
         },
@@ -3323,6 +3343,8 @@
         "icon",
         "color",
         "depends_on",
+        "path",
+        "strip",
         "running",
         "port_actual",
         "last_exit"

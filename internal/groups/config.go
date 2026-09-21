@@ -86,6 +86,17 @@ type Service struct {
 	Icon        string   `yaml:"icon,omitempty"`
 	Color       string   `yaml:"color,omitempty"`
 	DependsOn   []string `yaml:"depends_on,omitempty"`
+	// Path is where this service sits when the whole project is shared under
+	// one hostname. Empty means the default, `/_sonar/<name>`. This is
+	// project shape rather than reach — it says how the parts fit together,
+	// never who may see them — which is why it belongs in a committed file
+	// while `share:` is still refused outright.
+	Path string `yaml:"path,omitempty"`
+	// Strip takes Path off before the request reaches the service, so it sees
+	// the path it would see on localhost. Nil means the default, which is on:
+	// the prefix is the share's addressing, not the application's. Set it
+	// false for an application that does expect to see the prefix.
+	Strip *bool `yaml:"strip,omitempty"`
 	// Env is added to the service's environment when sonar starts it. Values
 	// may refer to ports with ${port}, ${url}, ${<service>.port} and
 	// ${<service>.url}.

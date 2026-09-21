@@ -137,6 +137,10 @@ func ServiceRow(s Service) state.Service {
 		svc.Port = &port
 	}
 	svc.PortAuto = s.PortAuto
+	// Where this service sits when the whole project is shared. Carried
+	// through untouched: what a path means is internal/share's business.
+	svc.Path = optional(s.Path)
+	svc.Strip = s.Strip
 	svc.Health = optional(s.Health)
 	svc.Description = optional(s.Description)
 	svc.Icon = optional(s.Icon)
