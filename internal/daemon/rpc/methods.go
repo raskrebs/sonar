@@ -933,20 +933,51 @@ func (RemoteCallResult) JSONSchema() *jsonschema.Schema {
 // Replace stops a share already live for the same key rather than failing with
 // share_limit_reached.
 type ShareCreateParams struct {
-	Target     Selector `json:"target"`
-	Reach      string   `json:"reach" jsonschema:"enum=lan,enum=public"`
-	TTL        *string  `json:"ttl,omitempty"`
-	ListenPort *int     `json:"listen_port,omitempty"`
-	Replace    bool     `json:"replace,omitempty"`
+	Target Selector `json:"target"`
+	Reach  string   `json:"reach" jsonschema:"enum=lan,enum=public"`
+	TTL    *string  `json:"ttl,omitempty"`
+	// Project shares the whole project the target belongs to under one
+	// hostname — the entry service at the root, every other HTTP service
+	// under a path — rather than the one service. A separate reservation
+	// from sharing that service alone, so neither hands back the other's URL.
+	Project    bool `json:"project,omitempty"`
+	ListenPort *int `json:"listen_port,omitempty"`
+	Replace    bool `json:"replace,omitempty"`
 }
 
 type ShareCreateResult struct {
 	MutationResult
 	Share state.Share `json:"share"`
+	// Project describes a project share: one line per service and where it
+	// sits, then one per service left out and why. Empty for a share of a
+	// single service.
 	// Notes are sentences worth putting in front of the person who ran this,
 	// about the share that was just made. Never failures — a failure is an
 	// error — and never more than a line each.
 	Notes []string `json:"notes,omitempty"`
+}
+
+// ShareProjectParams asks what sharing the whole of a target's project would
+// look like. It publishes nothing.
+type ShareProjectParams struct {
+	Target Selector `json:"target"`
+}
+
+// ShareProjectResult is what a client needs to offer a project share, or to
+// explain why there is not one. Available is false whenever a project share
+// is not possible — the port has no project, the project has no committed
+// sonar.yaml, or nothing else in it speaks HTTP — and Reason says which, in a
+// sentence meant to be shown.
+type ShareProjectResult struct {
+	Available bool `json:"available"`
+	// Group is the project's name, for the sentence a person reads.
+	Group string `json:"group,omitempty"`
+	// Entry is the service that would sit at the root.
+	Entry string `json:"entry,omitempty"`
+	// Services is one line per service and where it would sit, then one per
+	// service left out and why.
+	Services []string `json:"services,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
 }
 
 // ShareStopParams names the shares to stop: one by id, the ones on a target,

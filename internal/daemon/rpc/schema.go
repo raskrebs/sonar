@@ -337,6 +337,7 @@ func init() {
 
 	// Share (spec 3, amended by docs/SHARE.md in sonar-relay).
 	Describe("share.create", ShareCreateParams{}, ShareCreateResult{}, nil, nil)
+	Describe("share.project", ShareProjectParams{}, ShareProjectResult{}, nil, nil)
 	Describe("share.stop", ShareStopParams{}, ShareStopResult{}, nil, nil)
 	Describe("share.list", Empty{}, ShareListResult{}, nil, nil)
 	Describe("share.extend", ShareExtendParams{}, ShareExtendResult{}, nil, nil)

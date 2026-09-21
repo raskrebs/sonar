@@ -41,6 +41,7 @@ func SetManager(m *Manager) {
 
 func init() {
 	daemon.RegisterHandler("share.create", handleCreate)
+	daemon.RegisterHandler("share.project", handleProject)
 	daemon.RegisterHandler("share.stop", handleStop)
 	daemon.RegisterHandler("share.list", handleList)
 	daemon.RegisterHandler("share.extend", handleExtend)
@@ -220,4 +221,20 @@ func affected(share state.Share) []string {
 		return []string{}
 	}
 	return []string{state.Port{Host: state.LocalhostName, Port: share.TargetPort}.Key()}
+}
+
+func handleProject(ctx context.Context, req *daemon.Request) (any, error) {
+	var p rpc.ShareProjectParams
+	if err := req.Bind(&p); err != nil {
+		return nil, err
+	}
+	m, err := requireManager()
+	if err != nil {
+		return nil, err
+	}
+	snap, err := snapshot(req)
+	if err != nil {
+		return nil, err
+	}
+	return m.Preview(ctx, snap, p)
 }

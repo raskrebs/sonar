@@ -129,6 +129,13 @@ func runShare(cmd *cobra.Command, args []string) error {
 		params.TTL = &ttl
 	}
 
+	// Offer the whole project before anything is published. Asking first is
+	// the point: publishing the one service and then offering to replace it
+	// would spend an address on a share nobody asked for.
+	if wantsProject(ctx, c, port) {
+		params.Project = true
+	}
+
 	res, err := shareCreate(ctx, c, params)
 	if err != nil {
 		return err
@@ -438,6 +445,14 @@ func printNotes(notes []string) {
 			continue
 		}
 		fmt.Println()
+		// A note that already has line breaks is a table, and wrapping it
+		// would lose the shape that makes it readable.
+		if strings.Contains(n, "\n") {
+			for _, line := range strings.Split(n, "\n") {
+				fmt.Println(display.Dim("  " + line))
+			}
+			continue
+		}
 		for _, line := range wrapNote(n) {
 			fmt.Println(display.Dim("  " + line))
 		}
@@ -569,3 +584,46 @@ func shareIn(err error) *state.Share {
 //
 // It is a variable so a test can be both a terminal and not one.
 var stdinIsTerminal = func() bool { return isatty.IsTerminal(os.Stdin.Fd()) }
+
+// wantsProject asks the daemon whether this port is part of a project worth
+// sharing whole, and if so asks the person.
+//
+// Decision 4: the existing command offers rather than a new one existing.
+// Somebody sharing a frontend usually wants the API behind it too, and
+// discovering that by having the login button do nothing is the report this
+// feature exists to prevent.
+func wantsProject(ctx context.Context, c *client.Client, port int) bool {
+	if shareJSON || !stdinIsTerminal() {
+		// A script asks for what it wants: `sonar share <project> --public`.
+		// Never a prompt, and never a silent upgrade to something broader
+		// than the command said.
+		return false
+	}
+	var p rpc.ShareProjectResult
+	if err := c.Call(ctx, "share.project",
+		rpc.ShareProjectParams{Target: rpc.Selector{Port: &port}}, &p); err != nil {
+		// A daemon too old to answer, or anything else: share the one service,
+		// which is exactly what was typed.
+		return false
+	}
+	if !p.Available {
+		return false
+	}
+
+	fmt.Fprintf(os.Stderr, "\n%s is part of %s, which also runs:\n",
+		display.Bold(fmt.Sprintf("localhost:%d", port)), display.Bold(p.Group))
+	for _, line := range p.Services {
+		fmt.Fprintf(os.Stderr, "  %s\n", display.Dim(line))
+	}
+	fmt.Fprint(os.Stderr, "\nShare the whole project? [Y/n] ")
+
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "", "y", "yes":
+		return true
+	}
+	return false
+}

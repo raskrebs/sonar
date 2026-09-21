@@ -188,6 +188,23 @@ func (m *Manager) Create(ctx context.Context, snap state.Snapshot, p rpc.ShareCr
 	// is already holding it there is nothing to do: a second tunnel for one
 	// slug would have the relay hand the share to the new connection and tell
 	// the old one it was replaced, for no gain.
+
+	// Sharing the whole project rather than the one service.
+	//
+	// Before the check below, not after it: a project share has a reservation
+	// of its own, so resolving it is what decides which reservation "already
+	// sharing this" is asking about. Before anything is published, too, so a
+	// project that cannot be shared costs no slug.
+	var proj *project
+	if p.Project {
+		resolved, perr := m.resolveProject(ctx, snap, t)
+		if perr != nil {
+			return state.Share{}, nil, perr
+		}
+		t = resolved.key()
+		proj = &resolved
+	}
+
 	if existing, ok := m.liveFor(t); ok {
 		return existing.snapshot(), nil, nil
 	}
@@ -198,6 +215,10 @@ func (m *Manager) Create(ctx context.Context, snap state.Snapshot, p rpc.ShareCr
 	notes, err := m.checkTarget(ctx, t)
 	if err != nil {
 		return state.Share{}, nil, err
+	}
+	if proj != nil {
+		// Where each service sits, and what was left behind, under the URL.
+		notes = append(notes, proj.describe()...)
 	}
 
 	req, err := m.request(t, ttl, p.Replace)
@@ -238,9 +259,12 @@ func (m *Manager) Create(ctx context.Context, snap state.Snapshot, p rpc.ShareCr
 	l.cancel = cancel
 
 	cfg := tunnel.Config{
-		RelayURL:  m.controlURL(),
-		Key:       token,
-		Share:     view.Slug,
+		RelayURL: m.controlURL(),
+		Key:      token,
+		Share:    view.Slug,
+		// The entry service. Liveness watches this one: the share ends when
+		// the thing at the root goes away, while a secondary service dying
+		// only fails its own paths.
 		LocalPort: t.Port,
 		Client:    "sonar-daemon",
 		Logger:    m.log.With("share", view.Slug),
@@ -251,6 +275,9 @@ func (m *Manager) Create(ctx context.Context, snap state.Snapshot, p rpc.ShareCr
 			}
 		},
 		OnRequest: func(entry tunnel.RequestLog) { l.record(entry) },
+	}
+	if proj != nil {
+		cfg.Route = proj.Routes.router()
 	}
 
 	go func() {

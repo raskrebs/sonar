@@ -3963,6 +3963,9 @@
         "ttl": {
           "type": "string"
         },
+        "project": {
+          "type": "boolean"
+        },
         "listen_port": {
           "type": "integer"
         },
@@ -4070,6 +4073,43 @@
       "type": "object",
       "required": [
         "lines"
+      ]
+    },
+    "ShareProjectParams": {
+      "properties": {
+        "target": {
+          "$ref": "#/definitions/Selector"
+        }
+      },
+      "type": "object",
+      "required": [
+        "target"
+      ]
+    },
+    "ShareProjectResult": {
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "group": {
+          "type": "string"
+        },
+        "entry": {
+          "type": "string"
+        },
+        "services": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "available"
       ]
     },
     "ShareStopParams": {
@@ -4793,6 +4833,14 @@
       },
       "result": {
         "$ref": "#/definitions/ShareLogsResult"
+      }
+    },
+    "share.project": {
+      "params": {
+        "$ref": "#/definitions/ShareProjectParams"
+      },
+      "result": {
+        "$ref": "#/definitions/ShareProjectResult"
       }
     },
     "share.stop": {
