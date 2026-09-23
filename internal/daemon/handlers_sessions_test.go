@@ -34,6 +34,16 @@ func (f *fakeRuns) Prune() {}
 
 func (f *fakeRuns) Stopping([]int) {}
 
+func (f *fakeRuns) ServicePIDs(group, service string) []int {
+	var out []int
+	for _, l := range f.live {
+		if l.Group == group && l.Name == service {
+			out = append(out, l.PID)
+		}
+	}
+	return out
+}
+
 func (f *fakeRuns) GroupPIDs(group string) []int {
 	var out []int
 	for _, l := range f.live {

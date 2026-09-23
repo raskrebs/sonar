@@ -51,6 +51,10 @@ type RunRegistry interface {
 	Prune()
 	// GroupPIDs lists the live runs recorded under a group.
 	GroupPIDs(group string) []int
+	// ServicePIDs lists the live runs recorded under a group with this
+	// service name, so a `groups.kill` with `only` can stop one service's
+	// port-less run without touching its siblings.
+	ServicePIDs(group, service string) []int
 	// Stopping marks runs sonar is about to stop, so their exit is recorded
 	// as stopped rather than as a crash.
 	Stopping(pids []int)
@@ -64,6 +68,7 @@ func (noRuns) Run(state.Port) (state.Run, bool) { return state.Run{}, false }
 func (noRuns) Prune()                           {}
 func (noRuns) Stopping([]int)                   {}
 func (noRuns) GroupPIDs(string) []int           { return nil }
+func (noRuns) ServicePIDs(string, string) []int { return nil }
 
 // SetRuns installs the run registry. Called once, from an OnStart hook.
 func (r *Runtime) SetRuns(reg RunRegistry) {

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 // handleGroupsKill stops a group's listening ports. With release it is
 // `sonar down`: it also stops the runs sonar started in the group that hold no
 // port, and gives back the claims the group's `port: auto` services hold.
+// With only, all of that is narrowed to the named services of the group's
+// `sonar.yaml`.
 func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 	var p rpc.GroupsKillParams
 	if err := req.Bind(&p); err != nil {
@@ -24,32 +27,64 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 		return nil, err
 	}
 
+	// `only` names services, and only the file knows them: without one the
+	// names have nothing to be checked against, and the daemon has no row to
+	// map them onto.
+	var only []groups.Service
+	if len(p.Only) > 0 {
+		if cfg == nil {
+			cfg = configForGroup(req.Runtime, name)
+		}
+		if cfg == nil {
+			return nil, rpc.NewError(rpc.CodeInvalidParams,
+				"only names services, and no "+groups.ConfigName+" is known for group "+name,
+				"check the name with `sonar groups`, or stop one port with `sonar kill <port>`")
+		}
+		only, err = onlyServices(cfg, name, p.Only)
+		if err != nil {
+			return nil, err
+		}
+		if len(only) == 0 {
+			return nil, rpc.NewError(rpc.CodeInvalidParams, "only names no service",
+				`send {"only": ["api"]}, or leave only out to stop the whole group`)
+		}
+	}
+
 	snap, err := killSnapshot(req)
 	if err != nil {
 		return nil, err
 	}
 
 	targets := groupTargets(snap, name)
+	if only != nil {
+		targets = serviceTargets(snap, name, targets, only)
+	}
 	var runPIDs []int
 	if p.Release {
-		runPIDs = req.Runtime.Runs().GroupPIDs(name)
+		runPIDs = groupRunPIDs(req.Runtime, name, only)
 		if cfg == nil {
 			cfg = configForGroup(req.Runtime, name)
 		}
 	}
 	if len(targets) == 0 && len(runPIDs) == 0 {
 		if !p.Release || cfg == nil {
+			detail := "no listening port belongs to group " + name
+			hint := "run `sonar groups` to see what is grouped right now"
+			if only != nil {
+				detail = "no listening port belongs to " + strings.Join(onlyNames(only), ", ") + " in group " + name
+				hint = "run `sonar groups " + name + "` to see what is running right now"
+			}
 			return nil, killRPCError(&killer.CodedError{
 				Code:   killer.CodeNotFound,
-				Detail: "no listening port belongs to group " + name,
-				Hint:   "run `sonar groups` to see what is grouped right now",
+				Detail: detail,
+				Hint:   hint,
 			})
 		}
 		// Nothing is running, but a project with a config still has claims
 		// to give back.
 		env := killEnvelope(nil)
 		if !p.DryRun {
-			n, err := ReleaseServicePorts(req.Runtime, cfg)
+			n, err := ReleaseServicePorts(req.Runtime, cfg, onlyNames(only))
 			if err != nil {
 				return nil, err
 			}
@@ -76,7 +111,7 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 		// stopped by pid, each with its whole tree. The registry is read again
 		// after the port kill: most runs went down with their ports.
 		var pidTargets []killer.Target
-		for _, pid := range req.Runtime.Runs().GroupPIDs(name) {
+		for _, pid := range groupRunPIDs(req.Runtime, name, only) {
 			pidTargets = append(pidTargets, killer.Target{PID: pid})
 		}
 		if len(pidTargets) > 0 {
@@ -90,7 +125,7 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 
 	env := killEnvelope(rows)
 	if p.Release && !p.DryRun && cfg != nil {
-		n, err := ReleaseServicePorts(req.Runtime, cfg)
+		n, err := ReleaseServicePorts(req.Runtime, cfg, onlyNames(only))
 		if err != nil {
 			// The services are down; a claim left behind expires on its own.
 			req.Runtime.Logger.Warn("releasing a group's claims", "group", name, "error", err)
@@ -98,6 +133,94 @@ func handleGroupsKill(ctx context.Context, req *Request) (any, error) {
 		env.Released = n
 	}
 	return env, nil
+}
+
+// onlyServices resolves an `only` list against the file, the way groups.start
+// does: every name has to be one the file declares, and an unknown one is
+// not_found rather than a silent no-op.
+func onlyServices(cfg *groups.Config, group string, only []string) ([]groups.Service, error) {
+	plan, err := groups.Plan(cfg, only)
+	if err != nil {
+		var unknown *groups.UnknownServiceError
+		if errors.As(err, &unknown) {
+			return nil, rpc.NewError(rpc.CodeNotFound, unknown.Error(),
+				"`sonar groups "+group+"` lists the services this file declares")
+		}
+		return nil, rpc.NewError(rpc.CodeInternal, err.Error(), "")
+	}
+	out := make([]groups.Service, 0, len(plan))
+	for _, step := range plan {
+		out = append(out, step.Service)
+	}
+	return out, nil
+}
+
+// serviceTargets keeps the group's targets that belong to one of the named
+// services, joined the way the group's service rows are: the port the file
+// declares, the port the row says the service is on, and a run or a display
+// name that carries the service's name.
+func serviceTargets(snap state.Snapshot, group string, targets []killer.Target, only []groups.Service) []killer.Target {
+	names := make(map[string]bool, len(only))
+	wantPort := map[int]bool{}
+	for _, svc := range only {
+		names[svc.Name] = true
+		if svc.Port != 0 {
+			wantPort[svc.Port] = true
+		}
+	}
+	for _, g := range snap.Groups {
+		if g.Name != group {
+			continue
+		}
+		for _, row := range g.Services {
+			if names[row.Name] && row.PortActual != nil {
+				wantPort[*row.PortActual] = true
+			}
+		}
+	}
+	var out []killer.Target
+	for _, t := range targets {
+		if wantPort[t.Port] {
+			out = append(out, t)
+			continue
+		}
+		for _, p := range snap.Ports {
+			if p.Port != t.Port || p.BindAddress != t.BindAddress {
+				continue
+			}
+			if (p.Run != nil && names[p.Run.Name]) || names[p.DisplayName] {
+				out = append(out, t)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// groupRunPIDs lists the runs a release stops: every run in the group, or
+// with only the runs started under the named services.
+func groupRunPIDs(rt *Runtime, group string, only []groups.Service) []int {
+	if only == nil {
+		return rt.Runs().GroupPIDs(group)
+	}
+	var out []int
+	for _, svc := range only {
+		out = append(out, rt.Runs().ServicePIDs(group, svc.Name)...)
+	}
+	return out
+}
+
+// onlyNames is the names of services resolved from `only`, trimmed and
+// checked against the file; nil when there is no `only`.
+func onlyNames(services []groups.Service) []string {
+	if services == nil {
+		return nil
+	}
+	names := make([]string, 0, len(services))
+	for _, svc := range services {
+		names = append(names, svc.Name)
+	}
+	return names
 }
 
 // runRoots lists the runs a kill is about to stop: every target given by pid,

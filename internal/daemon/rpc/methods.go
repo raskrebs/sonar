@@ -91,6 +91,11 @@ const CapabilityAutoPorts = "groups.autoports"
 // with "restart it" rather than the dispatcher's generic unknown-method error.
 const CapabilityEnv = "groups.env"
 
+// CapabilityKillOnly is announced by a daemon whose `groups.kill` takes
+// `only`. The CLI checks for it before sending the field, because an older
+// daemon drops a field it does not know and would stop the whole group.
+const CapabilityKillOnly = "groups.kill.only"
+
 // Include lists the optional per-subscriber enrichments ("stats", "health").
 type Include []string
 
@@ -387,6 +392,12 @@ type GroupsKillParams struct {
 	// claims the group's `port: auto` services hold. A group with a config
 	// and nothing running is not an error then: its claims are still released.
 	Release bool `json:"release,omitempty"`
+	// Only restricts the kill to these services of the group's `sonar.yaml`,
+	// the way groups.start takes it: their listening ports, and with Release
+	// the runs sonar started under their names and the claims they hold. A
+	// name the file does not declare is not_found; a group with no file
+	// cannot take it.
+	Only []string `json:"only,omitempty"`
 }
 
 type GroupsStartParams struct {

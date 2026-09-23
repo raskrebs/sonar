@@ -391,14 +391,17 @@ exit non-zero, whatever else came up. Stop them all again with `sonar down`.
 ### `sonar down`
 
 ```sh
-sonar down            # the project in the nearest sonar.yaml
-sonar down my-app     # a group by name
+sonar down                     # the project in the nearest sonar.yaml
+sonar down my-app              # a group by name
+sonar down --only api,worker   # only these services
 ```
 
 Stops every service of the project — every port it listens on, and every
 service sonar started for it that holds no port, like a worker — and releases
-the ports sonar claimed for its `port: auto` services. `sonar kill -g my-app`
-stops the ports and releases nothing.
+the ports sonar claimed for its `port: auto` services. `--only` narrows all of
+that to the named services, the way `sonar up --only` starts only some; a name
+the file does not declare is an error. `sonar kill -g my-app` stops the ports
+and releases nothing.
 
 ### `sonar groups` and `sonar init`
 

@@ -251,6 +251,18 @@ func (r *Registry) GroupPIDs(group string) []int {
 	return out
 }
 
+// ServicePIDs is GroupPIDs narrowed to the runs started under one service
+// name: what `groups.kill` with `only` stops for that service.
+func (r *Registry) ServicePIDs(group, service string) []int {
+	var out []int
+	for _, rec := range r.List() {
+		if rec.Group == group && rec.Name == service {
+			out = append(out, rec.PID)
+		}
+	}
+	return out
+}
+
 // Session implements groups.SessionRegistry: it reports the agent session that
 // started the run owning this port, using the same PPID walk the run
 // attribution uses, so a port and its run can never disagree about who started

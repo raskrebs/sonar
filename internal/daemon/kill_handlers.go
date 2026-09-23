@@ -19,6 +19,7 @@ import (
 func init() {
 	RegisterHandler("ports.kill", handlePortsKill)
 	RegisterHandler("groups.kill", handleGroupsKill)
+	RegisterCapability(rpc.CapabilityKillOnly)
 }
 
 func handlePortsKill(ctx context.Context, req *Request) (any, error) {
