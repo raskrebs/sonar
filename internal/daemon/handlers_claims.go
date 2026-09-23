@@ -43,6 +43,7 @@ func claimsManager(rt *Runtime) (*claims.Manager, error) {
 	return claims.New(st.Claims(), claims.Options{
 		Listening:    func() (map[int]bool, error) { return listeningPorts(rt) },
 		DefaultCount: func(project string) int { return worktreePorts(rt, project) },
+		DefaultTTL:   rt.ClaimTTL,
 	}), nil
 }
 
@@ -178,6 +179,15 @@ func handleClaimsList(_ context.Context, req *Request) (any, error) {
 		live = []state.Claim{}
 	}
 	return rpc.ClaimsListResult{Claims: live}, nil
+}
+
+// claimTTLInEffect is the life a claim gets when its call names none: the
+// configured `claims.ttl`, else the manager's default.
+func claimTTLInEffect(rt *Runtime) time.Duration {
+	if rt.ClaimTTL > 0 {
+		return rt.ClaimTTL
+	}
+	return claims.DefaultTTL
 }
 
 // claimTTL reads the spec's ttl_seconds, falling back to the ttl_ms the

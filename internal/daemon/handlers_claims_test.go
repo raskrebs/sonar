@@ -235,3 +235,61 @@ func TestTwoAgentsAskingAtOnceGetDifferentPorts(t *testing.T) {
 		t.Fatalf("handed out %d distinct ports to %d agents", len(got), agents)
 	}
 }
+
+// TestConfiguredClaimTTLIsTheDefaultForACall is `claims.ttl`: a call that
+// names no ttl gets the configured life, a call that names one keeps it, and
+// `daemon.status` says which is in effect.
+func TestConfiguredClaimTTLIsTheDefaultForACall(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h, _ := storeHarness(t, ctx)
+	// Set on the runtime rather than through Options: the harness builds its
+	// Server itself, and the runtime is where the handlers read it.
+	h.srv.runtime.ClaimTTL = 2 * time.Hour
+	c := h.dial(ctx)
+
+	var status rpc.DaemonStatusResult
+	if e := c.call("daemon.status", rpc.Empty{}, &status); e != nil {
+		t.Fatalf("daemon.status: %v", e)
+	}
+	if status.ClaimTTLMs != int((2 * time.Hour).Milliseconds()) {
+		t.Errorf("claim_ttl_ms = %d, want two hours", status.ClaimTTLMs)
+	}
+
+	before := time.Now()
+	var res rpc.ClaimsAcquireResult
+	if e := c.call("claims.acquire", rpc.ClaimsAcquireParams{Project: "app", Worktree: "wt"}, &res); e != nil {
+		t.Fatalf("claims.acquire: %v", e)
+	}
+	expires, err := time.Parse(time.RFC3339, res.ExpiresAt)
+	if err != nil {
+		t.Fatalf("expires_at %q: %v", res.ExpiresAt, err)
+	}
+	if life := expires.Sub(before); life < 2*time.Hour-time.Minute || life > 2*time.Hour+time.Minute {
+		t.Errorf("claim lives %s, want about the configured two hours", life)
+	}
+
+	var short rpc.ClaimsAcquireResult
+	if e := c.call("claims.acquire", rpc.ClaimsAcquireParams{Key: res.Key, TTLSeconds: 60}, &short); e != nil {
+		t.Fatalf("claims.acquire with ttl: %v", e)
+	}
+	if short.ExpiresAt >= res.ExpiresAt {
+		t.Errorf("an explicit ttl should win over the configured one: %s is not before %s",
+			short.ExpiresAt, res.ExpiresAt)
+	}
+}
+
+func TestUnsetClaimTTLReportsTheBuiltInDefault(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h, _ := storeHarness(t, ctx)
+	c := h.dial(ctx)
+
+	var status rpc.DaemonStatusResult
+	if e := c.call("daemon.status", rpc.Empty{}, &status); e != nil {
+		t.Fatalf("daemon.status: %v", e)
+	}
+	if status.ClaimTTLMs != int(claims.DefaultTTL.Milliseconds()) {
+		t.Errorf("claim_ttl_ms = %d, want the built-in %s", status.ClaimTTLMs, claims.DefaultTTL)
+	}
+}

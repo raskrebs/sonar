@@ -26,6 +26,27 @@ type Config struct {
 	// Share holds the sharing settings; today that is the relay this machine
 	// signs in to (see share.go).
 	Share ShareConfig `yaml:"share"`
+	// Claims holds the port-claim settings (see ClaimsConfig).
+	Claims ClaimsConfig `yaml:"claims"`
+}
+
+// ClaimsConfig is the claims book's corner of the config.
+type ClaimsConfig struct {
+	// TTL is how long a claim lives from its last acquire, as a Go duration
+	// ("24h", "168h"): the life of a `port: auto` service's port between
+	// starts, and of a `sonar claim` or `claim_port` reservation. A call that
+	// names its own ttl wins. Empty means DefaultClaimTTL.
+	TTL string `yaml:"ttl"`
+}
+
+// ResolvedTTL returns the parsed claim life, falling back to DefaultClaimTTL
+// when the setting is absent or unusable.
+func (c ClaimsConfig) ResolvedTTL() time.Duration {
+	v, err := time.ParseDuration(strings.TrimSpace(c.TTL))
+	if err != nil || v <= 0 {
+		return DefaultClaimTTL
+	}
+	return v
 }
 
 // DesktopConfig is the desktop app's corner of the config. download_base is a
@@ -59,6 +80,11 @@ const (
 	DefaultScanInterval  = 2 * time.Second
 	MinScanInterval      = 1 * time.Second
 )
+
+// DefaultClaimTTL is how long a port claim lives when neither the caller nor
+// `claims.ttl` says: one day (spec 2 §4). It mirrors claims.DefaultTTL, for
+// the same reason the intervals above mirror the scanner's.
+const DefaultClaimTTL = 24 * time.Hour
 
 // DaemonConfig holds `sonar serve` settings.
 type DaemonConfig struct {
@@ -210,6 +236,13 @@ const template = `# sonar configuration
 #   # apply a change, and 'sonar daemon status' shows what is in effect.
 #   scan_interval: 2s
 
+# claims:
+#   # How long a port claim lives from its last acquire: the port a
+#   # 'port: auto' service keeps between starts, and a 'sonar claim' or
+#   # 'claim_port' reservation. A call that names its own ttl wins. Read at
+#   # startup: restart the daemon to apply a change.
+#   ttl: 24h
+
 # color: true       # set false to disable colored output
 
 # services:         # label custom/unknown ports (port: name)
@@ -346,6 +379,13 @@ func validate(cfg *Config) []string {
 	if v := strings.TrimSpace(cfg.Daemon.LogLevel); v != "" && !validLogLevels[strings.ToLower(v)] {
 		warnings = append(warnings, fmt.Sprintf("config: invalid daemon.log_level %q — using info", v))
 		cfg.Daemon.LogLevel = ""
+	}
+
+	if v := strings.TrimSpace(cfg.Claims.TTL); v != "" {
+		if d, err := time.ParseDuration(v); err != nil || d <= 0 {
+			warnings = append(warnings, fmt.Sprintf("config: invalid claims.ttl %q — using %s", v, DefaultClaimTTL))
+			cfg.Claims.TTL = ""
+		}
 	}
 
 	for port := range cfg.Services {

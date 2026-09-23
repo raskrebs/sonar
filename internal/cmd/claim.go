@@ -45,7 +45,7 @@ outside sonar can still take the port.
 Examples:
   sonar claim                 # one port for this worktree
   sonar claim --count 3       # three
-  sonar claim --ttl 2h        # expire sooner than the 24h default
+  sonar claim --ttl 2h        # expire in 2h instead of the daemon's default
   sonar claim --release       # give this worktree's ports back
   sonar claim --list --json   # every live claim on this machine`,
 	Args: cobra.NoArgs,
@@ -71,7 +71,7 @@ func init() {
 	claimCmd.Flags().StringVar(&claimProject, "project", "", "Project name (default: the git checkout's name)")
 	claimCmd.Flags().StringVar(&claimWorktree, "worktree", "", "Worktree name (default: this checkout's, or main)")
 	claimCmd.Flags().IntVarP(&claimCount, "count", "n", 0, "How many ports to claim (default: the project's worktree_ports from sonar.yaml, else 1)")
-	claimCmd.Flags().StringVar(&claimTTLFlag, "ttl", "24h", "How long the claim lives (e.g. 2h, 30m)")
+	claimCmd.Flags().StringVar(&claimTTLFlag, "ttl", "", "How long the claim lives (e.g. 2h, 30m; default: the daemon's claims.ttl, else 24h)")
 	claimCmd.Flags().BoolVar(&claimRelease, "release", false, "Release this key's ports instead of claiming")
 	claimCmd.Flags().BoolVar(&claimListFlag, "list", false, "List live claims instead of claiming")
 	claimCmd.Flags().BoolVar(&claimJSON, "json", false, "Output as JSON")
@@ -81,9 +81,14 @@ func init() {
 }
 
 func claimRun(cmd *cobra.Command, _ []string) error {
-	ttl, err := claimTTL()
-	if err != nil {
-		return err
+	// An unset --ttl sends no ttl, so the daemon can apply `claims.ttl`, or a
+	// day; only a ttl the user typed is parsed here.
+	var ttl time.Duration
+	if cmd.Flags().Changed("ttl") {
+		var err error
+		if ttl, err = claimTTL(); err != nil {
+			return err
+		}
 	}
 	// An unset --count sends no count, so the daemon can apply the project's
 	// worktree_ports; only a count the user typed is checked here.

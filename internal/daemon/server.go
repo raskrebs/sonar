@@ -51,6 +51,9 @@ type Options struct {
 	// (`daemon.scan_interval`). Zero means scanner.BaseInterval. Ignored when
 	// Scanner is set, for the same reason StatsInterval is.
 	ScanInterval time.Duration
+	// ClaimTTL is how long a port claim lives when the call names no ttl
+	// (`claims.ttl`). Zero means claims.DefaultTTL.
+	ClaimTTL time.Duration
 	// Logger receives the daemon's structured log. Required in production;
 	// tests may leave it nil for a discard logger.
 	Logger *slog.Logger
@@ -141,6 +144,7 @@ func New(opts Options) *Server {
 		StartedAt:  time.Now(),
 		Logger:     opts.Logger,
 		Scanner:    s.loop,
+		ClaimTTL:   opts.ClaimTTL,
 		srv:        s,
 	}
 	s.loop.SetRuns(s.runtime.RunRegistry)

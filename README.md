@@ -306,7 +306,9 @@ same one each time in the same checkout, and a different one in every other
 checkout, so a worktree never collides with the main one. The service gets it
 as `PORT`, `SONAR_PORT` and `${port}`, and it has to use it — read `PORT`, or
 pass `${port}` on its command line. A service that is already running keeps
-its port, so one started later still finds it.
+its port, so one started later still finds it. The claim behind an assigned
+port lasts a day from the last start; `claims.ttl` changes that (see The
+daemon).
 
 `${port}` and `${url}` (`http://localhost:<port>`) are the service's own;
 `${<service>.port}` and `${<service>.url}` are another's. They work in `cmd`
@@ -724,7 +726,7 @@ app, and editors.
 ```sh
 sonar serve                  # in the foreground
 sonar serve --detach         # in the background
-sonar daemon status          # pid, uptime, subscribers, scans, intervals
+sonar daemon status          # pid, uptime, subscribers, scans, intervals, claim ttl
 sonar daemon path            # the socket it listens on
 sonar daemon log -n 50 -f    # what it is doing
 sonar daemon restart
@@ -766,6 +768,11 @@ then `sonar daemon restart`. `sonar daemon status` prints the values in
 effect (`scan base`, `stats tick`) next to the adaptive interval the scanner is
 on right now.
 
+A port sonar claims, for a `port: auto` service or through `sonar claim` or
+`claim_port`, is kept for a day after it was last claimed. `claims.ttl` in the
+config file changes that. It is also read when the daemon starts, and
+`sonar daemon status` prints it as `claim ttl`.
+
 A subscriber that asks for `include: ["health"]` makes the daemon probe **every
 listening port** on a slower cadence, not only the services that declare a
 `health:` path — those are polled on every tick and reach every subscriber
@@ -796,6 +803,8 @@ daemon:
   log_level: info       # debug | info | warn | error
   scan_interval: 2s     # base port-scan cadence, minimum 1s
   stats_interval: 1s    # cpu/memory refresh while subscribed, minimum 250ms
+claims:
+  ttl: 24h              # how long a port claim lives from its last acquire
 color: true
 services:               # label custom/unknown ports
   9000: php-fpm

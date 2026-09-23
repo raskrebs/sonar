@@ -202,6 +202,7 @@ func TestTemplateDocumentsTheDaemonAndItsEnvironment(t *testing.T) {
 	for _, want := range []string{
 		"# daemon:", "idle_timeout: 30m", "log_level: info", "stats_interval: 1s",
 		"scan_interval: 2s",
+		"# claims:", "ttl: 24h",
 		"SONAR_DB", "SONAR_SOCKET",
 	} {
 		if !strings.Contains(template, want) {
@@ -305,5 +306,40 @@ func TestValidateDropsUnparseableScanInterval(t *testing.T) {
 	}
 	if got := cfg.Daemon.ResolvedScanInterval(); got != DefaultScanInterval {
 		t.Errorf("scan_interval = %s, want the %s default", got, DefaultScanInterval)
+	}
+}
+
+// claims.ttl is used as written when it is a positive duration; anything else
+// is repaired with a warning, the way every other bad setting is, and its
+// neighbours survive.
+func TestClaimsTTLResolvesAndWarns(t *testing.T) {
+	writeConfig(t, "claims:\n  ttl: 168h\n")
+	cfg, warnings := Load()
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if got := cfg.Claims.ResolvedTTL(); got != 168*time.Hour {
+		t.Errorf("ResolvedTTL = %s, want 168h", got)
+	}
+
+	for _, bad := range []string{"soon", "0", "-1h"} {
+		writeConfig(t, "claims:\n  ttl: "+bad+"\ndaemon:\n  log_level: warn\n")
+		cfg, warnings := Load()
+		if len(warnings) != 1 || !strings.Contains(warnings[0], "claims.ttl") {
+			t.Errorf("ttl %q: warnings = %v, want one about claims.ttl", bad, warnings)
+		}
+		if cfg.Claims.TTL != "" {
+			t.Errorf("ttl %q should be cleared, got %q", bad, cfg.Claims.TTL)
+		}
+		if got := cfg.Claims.ResolvedTTL(); got != DefaultClaimTTL {
+			t.Errorf("ttl %q: ResolvedTTL = %s, want the default %s", bad, got, DefaultClaimTTL)
+		}
+		if cfg.Daemon.LogLevel != "warn" {
+			t.Errorf("ttl %q: a valid neighbour should survive, got log_level %q", bad, cfg.Daemon.LogLevel)
+		}
+	}
+
+	if (ClaimsConfig{}).ResolvedTTL() != DefaultClaimTTL {
+		t.Error("an unset ttl should resolve to the default")
 	}
 }
