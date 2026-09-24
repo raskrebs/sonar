@@ -297,6 +297,16 @@ func (m *Manager) Create(ctx context.Context, snap state.Snapshot, p rpc.ShareCr
 	}
 
 	out := l.snapshot()
+	// Last, because the sentence carries the URL and the URL is only settled
+	// here. An application that checks which page is asking — a CORS list, a
+	// sign-in redirect allowlist — will refuse this share while it names only
+	// localhost, and the error it produces says "CORS" rather than saying
+	// which variable to edit.
+	if g, ok := groupNamed(snap, t.Group); ok {
+		if note := originNote(g, out.URL); note != "" {
+			notes = append(notes, note)
+		}
+	}
 	m.log.Info("share published", "slug", view.Slug, "url", out.URL,
 		"port", t.Port, "status", out.Status, "ttl", ttl)
 	return out, notes, nil
