@@ -62,6 +62,9 @@ var shareCmd = &cobra.Command{
 		"The daemon holds the share, so this command prints the URL and exits.\n" +
 		"The share ends when the service stops, or when the TTL runs out.",
 	Args: cobra.MaximumNArgs(1),
+	// Hidden while the share work is parked: the command works for whoever
+	// knows it, and stays out of the help until the feature is announced.
+	Hidden: true,
 	// The messages here are the feature: the reach refusal and the limit offer
 	// are both several lines meant to be read. Cobra printing them a second
 	// time above the usage block would bury them.
