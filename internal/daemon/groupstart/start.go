@@ -97,6 +97,15 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 
 	end := rpc.GroupsStartEnd{Started: []string{}, Skipped: []string{}, Errors: []string{}}
 	book := newAddressBook(rt, cfg, group)
+	// The services this call could not start. One that waits on any of them is
+	// not going to see its port, and waiting out the whole dependency timeout
+	// to say so costs the caller thirty seconds per service down the chain.
+	failed := map[string]bool{}
+	fail := func(name, why string) {
+		failed[name] = true
+		_ = s.Send(rpc.GroupsStartChunk{Service: name, Error: why})
+		end.Errors = append(end.Errors, name)
+	}
 
 	for _, step := range plan {
 		if ctx.Err() != nil {
@@ -110,20 +119,23 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 			continue
 		}
 
+		if dep := firstFailed(step.Waits, failed); dep != "" {
+			fail(svc.Name, "not started: it waits for "+dep+", which did not start")
+			continue
+		}
+
 		if err := waitFor(ctx, rt, group, step.Waits, book); err != nil {
 			if ctx.Err() != nil {
 				return end
 			}
-			_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, Error: err.Error()})
-			end.Errors = append(end.Errors, svc.Name)
+			fail(svc.Name, err.Error())
 			continue
 		}
 
 		h, err := start(ctx, rt, cfg, group, svc, book, p, meta)
 		if err != nil {
 			rt.Logger.Warn("starting a service", "group", group, "service", svc.Name, "error", err)
-			_ = s.Send(rpc.GroupsStartChunk{Service: svc.Name, Error: detail(err)})
-			end.Errors = append(end.Errors, svc.Name)
+			fail(svc.Name, detail(err))
 			continue
 		}
 		_ = s.Send(rpc.GroupsStartChunk{
@@ -133,6 +145,17 @@ func run(ctx context.Context, rt *daemon.Runtime, s *daemon.Stream,
 		end.Started = append(end.Started, svc.Name)
 	}
 	return end
+}
+
+// firstFailed names the first dependency that this call failed to start, or ""
+// when every one of them is still worth waiting for.
+func firstFailed(deps []groups.Service, failed map[string]bool) string {
+	for _, dep := range deps {
+		if failed[dep.Name] {
+			return dep.Name
+		}
+	}
+	return ""
 }
 
 // start spawns one service through the run registry, so the ports it opens are

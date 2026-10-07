@@ -35,7 +35,15 @@ func init() {
 	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVar(&noDaemonFlag, "no-daemon", false,
 		"Never talk to the sonar daemon; scan directly instead")
+	// Execute prints the error, once. Left to cobra it is printed twice — by
+	// cobra and then by Execute — and an errSilent comes out as a bare "Error:".
+	rootCmd.SilenceErrors = true
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		// Reaching here means the flags and arguments parsed, so whatever fails
+		// from now on is the work failing, not the invocation: the usage text
+		// under it would only bury the message that says what went wrong.
+		cmd.SilenceUsage = true
+
 		cfg, warnings := config.Load()
 		for _, w := range warnings {
 			fmt.Fprintln(os.Stderr, w)
@@ -60,10 +68,27 @@ func init() {
 var errSilent = errors.New("")
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		if !errors.Is(err, errSilent) {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		os.Exit(1)
+	cmd, err := rootCmd.ExecuteC()
+	if err == nil {
+		return
+	}
+	if msg := errorLine(cmd, err); msg != "" {
+		fmt.Fprintln(os.Stderr, msg)
+	}
+	os.Exit(1)
+}
+
+// errorLine is what a failed command prints, or "" when it has already said
+// everything itself. A command that sets SilenceErrors writes messages meant
+// to be read as they are, several lines of them; every other error gets the
+// "Error:" a reader scans for.
+func errorLine(cmd *cobra.Command, err error) string {
+	switch {
+	case errors.Is(err, errSilent):
+		return ""
+	case cmd != nil && cmd != rootCmd && cmd.SilenceErrors:
+		return err.Error()
+	default:
+		return "Error: " + err.Error()
 	}
 }
