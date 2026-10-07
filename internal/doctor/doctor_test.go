@@ -38,6 +38,11 @@ func fakeEnv(t *testing.T) *Env {
 			return "", errors.New("no network in tests")
 		},
 		Docker: func(context.Context) (string, error) { return "", errors.New("no docker in tests") },
+		// Only what a test put under its own temp directories exists: a Sonar.app
+		// in this machine's /Applications is not part of any case here.
+		Exists: func(path string) bool {
+			return strings.HasPrefix(path, os.TempDir()) && exists(path)
+		},
 	}
 }
 

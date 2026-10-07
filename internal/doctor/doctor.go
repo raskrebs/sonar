@@ -114,6 +114,10 @@ type Env struct {
 	LookPath func(string) (string, error)
 	// UID is the current user's numeric id on unix; -1 when unknown.
 	UID int
+	// Exists reports whether a path is on disk. Nil means the real disk; a
+	// test sets it so the checks that look in fixed places, like
+	// /Applications, see the machine it describes and not the one it runs on.
+	Exists func(string) bool
 
 	// Daemon reports the daemon's identity, or why it could not be reached.
 	Daemon func(context.Context) DaemonInfo
@@ -361,6 +365,14 @@ func (e *Env) homePath(parts ...string) string {
 		return ""
 	}
 	return filepath.Join(append([]string{e.Home}, parts...)...)
+}
+
+// exists is Exists, or the real disk when it is not set.
+func (e *Env) exists(path string) bool {
+	if e.Exists != nil {
+		return e.Exists(path)
+	}
+	return exists(path)
 }
 
 func exists(path string) bool {
