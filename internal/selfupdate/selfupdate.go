@@ -174,33 +174,21 @@ func DownloadAndReplace(downloadURL string) error {
 	return nil
 }
 
+// checkWritable reports whether the update can replace the binary at path.
+//
+// The replacement is a rename inside the binary's directory (replaceBinary), so
+// the directory is what has to be writable — not the file. Opening the file for
+// writing is the wrong question as well as an unnecessary one: Linux refuses it
+// with "text file busy" for any executable that is running, and the binary
+// being updated is the one asking.
 func checkWritable(path string) error {
-	if runtime.GOOS == "windows" {
-		// On Windows, we can't open a running executable for writing.
-		// Check that the directory is writable instead.
-		dir := filepath.Dir(path)
-		tmp, err := os.CreateTemp(dir, ".sonar-write-test-*")
-		if err != nil {
-			return fmt.Errorf("binary directory %s is not writable: %w", dir, err)
-		}
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return nil
-	}
-
-	info, err := os.Stat(path)
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".sonar-write-test-*")
 	if err != nil {
-		return fmt.Errorf("cannot stat binary at %s: %w", path, err)
+		return fmt.Errorf("binary directory %s is not writable: %w", dir, err)
 	}
-	if info.Mode().Perm()&0200 == 0 {
-		return fmt.Errorf("binary at %s is not writable", path)
-	}
-	// Try opening for write to confirm
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return fmt.Errorf("binary at %s is not writable: %w", path, err)
-	}
-	f.Close()
+	tmp.Close()
+	os.Remove(tmp.Name())
 	return nil
 }
 
