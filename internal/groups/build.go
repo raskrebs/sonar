@@ -31,15 +31,25 @@ type ExitHistory interface {
 	LastExit(group, service string) (state.ServiceExit, bool)
 }
 
+// LiveRuns is the third optional half of Registry: whether a run sonar started
+// under a service's name is still alive. It is the only way to know that a
+// service with no port is up — a worker, a watcher — since nothing it does
+// shows in a port scan.
+type LiveRuns interface {
+	ServiceLive(group, service string) bool
+}
+
 // GroupsWith is Groups with what the run registry knows beyond attribution:
-// the ports it assigned (PortHints) and how its runs ended (ExitHistory). reg
-// may be nil, and may implement either, both or neither.
+// the ports it assigned (PortHints), how its runs ended (ExitHistory) and
+// which are still alive (LiveRuns). reg may be nil, and may implement any of
+// them or none.
 func GroupsWith(pp []state.Port, index *Index, reg Registry) []state.Group {
 	if index == nil {
 		index = NewIndex()
 	}
 	hints, _ := reg.(PortHints)
 	exits, _ := reg.(ExitHistory)
+	live, _ := reg.(LiveRuns)
 	byName := map[string]*state.Group{}
 	members := map[string][]state.Port{}
 
@@ -82,7 +92,7 @@ func GroupsWith(pp []state.Port, index *Index, reg Registry) []state.Group {
 		if rank(state.SourceFile) > rank(g.Source) {
 			g.Source = state.SourceFile
 		}
-		g.Services = services(cfg, name, members[name], hints, exits)
+		g.Services = services(cfg, name, members[name], hints, exits, live)
 	}
 
 	out := make([]state.Group, 0, len(byName))
@@ -166,7 +176,7 @@ func optional(s string) *string {
 // listening in that group: by declared port first, then by the port sonar
 // assigned a `port: auto` service, then by the name the scanner shows for the
 // port.
-func services(cfg *Config, group string, member []state.Port, hints PortHints, exits ExitHistory) []state.Service {
+func services(cfg *Config, group string, member []state.Port, hints PortHints, exits ExitHistory, live LiveRuns) []state.Service {
 	out := make([]state.Service, 0, len(cfg.Services))
 	for _, s := range cfg.Services {
 		svc := ServiceRow(s)
@@ -181,6 +191,12 @@ func services(cfg *Config, group string, member []state.Port, hints PortHints, e
 				svc.Running, svc.PortActual = true, &actual
 				break
 			}
+		}
+		// A service that declares no port has no listener to be joined to, so
+		// its run being alive is all there is to go on. One that does declare a
+		// port is not up until it listens, however alive its process is.
+		if !svc.Running && s.Port == 0 && !s.PortAuto && live != nil && live.ServiceLive(group, s.Name) {
+			svc.Running = true
 		}
 		// A service that is down says how its last run ended, when sonar was
 		// the one that started it.
