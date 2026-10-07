@@ -3,6 +3,11 @@ package remote
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -473,8 +478,46 @@ func TestSSHArgs(t *testing.T) {
 	}
 
 	bare := SSHArgs(Host{Name: "a", Target: "box"})
-	if bare[len(bare)-1] != "sonar daemon stdio" {
-		t.Errorf("remote command = %q, want the PATH default", bare[len(bare)-1])
+	const def = `sh -c 'PATH="$HOME/.local/bin:$PATH"; exec sonar daemon stdio'`
+	if bare[len(bare)-1] != def {
+		t.Errorf("remote command = %q, want %q", bare[len(bare)-1], def)
+	}
+}
+
+// TestFarCommandFindsAnInstallOffThePATH runs the default command the way the
+// far side does — in a shell whose PATH has no ~/.local/bin, which is what ssh
+// gives a command on a stock Debian or Ubuntu — and expects it to reach the
+// sonar `sonar remote install` put there.
+func TestFarCommandFindsAnInstallOffThePATH(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the far side is a POSIX shell")
+	}
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\necho reached \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "sonar"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(command string) (string, error) {
+		cmd := exec.Command("/bin/sh", "-c", command)
+		cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+		out, err := cmd.CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+
+	if out, err := run(DefaultRemoteBinary + " " + RemoteCommand); err == nil {
+		t.Fatalf("a bare sonar ran (%q): this PATH was meant not to have it", out)
+	}
+	out, err := run(FarCommand("", "--no-autostart"))
+	if err != nil {
+		t.Fatalf("FarCommand: %v: %s", err, out)
+	}
+	if out != "reached daemon stdio --no-autostart" {
+		t.Errorf("output = %q, want the install's sonar to have run", out)
 	}
 }
 

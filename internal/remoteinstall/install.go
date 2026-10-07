@@ -13,6 +13,7 @@ import (
 
 	"github.com/raskrebs/sonar/internal/daemon/client"
 	"github.com/raskrebs/sonar/internal/daemon/rpc"
+	"github.com/raskrebs/sonar/internal/remote"
 )
 
 // Options is one `sonar remote install` run.
@@ -234,7 +235,9 @@ func helloOverStdio(ctx context.Context, r runner) (rpc.DaemonHelloResult, error
 	ctx, cancel := context.WithTimeout(ctx, helloTimeout)
 	defer cancel()
 
-	stream, err := r.stdio(ctx, `"`+BinPath+`" daemon stdio --no-autostart`)
+	// The bridge's own command, so a check that passes here is a bridge that
+	// will connect: no binary named, found the way `remote.add` will find it.
+	stream, err := r.stdio(ctx, remote.FarCommand("", "--no-autostart"))
 	if err != nil {
 		return rpc.DaemonHelloResult{}, err
 	}
