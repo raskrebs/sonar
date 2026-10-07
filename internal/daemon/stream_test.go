@@ -155,9 +155,35 @@ func TestStreamCancelStopsTheProducer(t *testing.T) {
 	}
 	<-p.started
 
-	var ok rpc.OKResult
-	if e := c.call("stream.cancel", rpc.StreamCancel{ID: start.SubscriptionID}, &ok); e != nil {
-		t.Fatalf("stream.cancel: %v", e)
+	// The acknowledgement and the stream's end are written by two goroutines —
+	// the dispatcher and the producer the cancel just stopped — so they arrive
+	// in either order. `call` drops every notification it reads on the way to
+	// its reply, which would throw the end away whenever it came first and
+	// leave the read below waiting for a message that had already gone by.
+	id := c.send("stream.cancel", rpc.StreamCancel{ID: start.SubscriptionID})
+	var (
+		ok        rpc.OKResult
+		end       rpc.StreamEnd
+		acked     bool
+		sawTheEnd bool
+	)
+	for !acked || !sawTheEnd {
+		m := c.read()
+		switch {
+		case m.IsResponse() && string(m.ID) == id:
+			if m.Error != nil {
+				t.Fatalf("stream.cancel: %v", m.Error)
+			}
+			if err := json.Unmarshal(m.Result, &ok); err != nil {
+				t.Fatalf("decoding the stream.cancel result: %v", err)
+			}
+			acked = true
+		case m.IsNotification() && m.Method == rpc.MethodStreamEnd:
+			if err := json.Unmarshal(m.Params, &end); err != nil {
+				t.Fatalf("decoding stream.end: %v", err)
+			}
+			sawTheEnd = true
+		}
 	}
 	if !ok.OK {
 		t.Fatal("stream.cancel did not acknowledge")
@@ -172,11 +198,6 @@ func TestStreamCancelStopsTheProducer(t *testing.T) {
 		t.Fatal("cancelling the stream did not stop the producer")
 	}
 
-	msg := c.nextNotification(rpc.MethodStreamEnd)
-	var end rpc.StreamEnd
-	if err := json.Unmarshal(msg.Params, &end); err != nil {
-		t.Fatalf("decoding stream.end: %v", err)
-	}
 	if end.Error != nil {
 		t.Fatalf("a cancelled stream must end cleanly, got %v", end.Error)
 	}
