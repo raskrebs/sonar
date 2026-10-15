@@ -1345,6 +1345,12 @@
         },
         "release": {
           "type": "boolean"
+        },
+        "only": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "type": "object",

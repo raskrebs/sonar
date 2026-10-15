@@ -34,10 +34,15 @@ func AcquireServicePort(rt *Runtime, dir, service string) (int, error) {
 }
 
 // ReleaseServicePorts gives back the claims a config's `port: auto` services
-// hold, for `sonar down`. It reports how many ports went.
-func ReleaseServicePorts(rt *Runtime, cfg *groups.Config) (int, error) {
+// hold, for `sonar down`. With only set, just those services' claims go; empty
+// means all of them. It reports how many ports went.
+func ReleaseServicePorts(rt *Runtime, cfg *groups.Config, only []string) (int, error) {
 	if cfg == nil {
 		return 0, nil
+	}
+	keep := map[string]bool{}
+	for _, name := range only {
+		keep[name] = true
 	}
 	project, worktree := claims.Identity(cfg.Dir, "", "")
 	claimsMu.Lock()
@@ -48,7 +53,7 @@ func ReleaseServicePorts(rt *Runtime, cfg *groups.Config) (int, error) {
 	}
 	released := 0
 	for _, svc := range cfg.Services {
-		if !svc.PortAuto {
+		if !svc.PortAuto || (len(keep) > 0 && !keep[svc.Name]) {
 			continue
 		}
 		n, err := m.Release(claims.ServiceKey(project, worktree, svc.Name))
