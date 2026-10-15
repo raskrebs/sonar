@@ -49,6 +49,13 @@ func downRun(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("only") && len(downOnlyFlag) == 0 {
 		return fmt.Errorf("--only needs at least one service name")
 	}
+	// Only the daemon on this machine says what it supports. A remote one too
+	// old for `only` would drop it and stop the whole group, which is the one
+	// thing --only promises not to do, so until the far daemon can be asked
+	// the pair is refused.
+	if len(downOnlyFlag) > 0 && onRemoteHost() {
+		return fmt.Errorf("--only does not work with --host yet: the daemon on %s may be one that would stop the whole group\nhint: run `sonar down --only` on that host itself", remoteHostFlag)
+	}
 	params := rpc.GroupsKillParams{HostParams: hostParams(), Force: downForceFlag, Release: true, Only: downOnlyFlag}
 	var local *groups.Config
 	if len(args) == 1 {

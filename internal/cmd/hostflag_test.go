@@ -208,6 +208,32 @@ func TestKillHostRefusesWithoutTheDaemon(t *testing.T) {
 	}
 }
 
+// TestDownOnlyRefusesARemoteHost: a remote daemon too old for `only` would drop
+// it and stop the whole group, and nothing here can ask that daemon what it
+// supports, so the pair is refused before any daemon is dialled.
+func TestDownOnlyRefusesARemoteHost(t *testing.T) {
+	onHost(t, "fake")
+	prevOnly := downOnlyFlag
+	downOnlyFlag = []string{"api"}
+	t.Cleanup(func() { downOnlyFlag = prevOnly })
+
+	never := func(context.Context) (*client.Client, error) {
+		t.Fatal("down --only --host dialled a daemon")
+		return nil, nil
+	}
+	prevDial, prevWrite := dialDaemon, connectForWrite
+	dialDaemon, connectForWrite = never, never
+	t.Cleanup(func() { dialDaemon, connectForWrite = prevDial, prevWrite })
+
+	err := downRun(downCmd, []string{"shop"})
+	if err == nil {
+		t.Fatal("want an error: --only with --host could stop the whole remote group")
+	}
+	if !strings.Contains(err.Error(), "--only") || !strings.Contains(err.Error(), "--host") {
+		t.Errorf("err = %v, want it to name both flags", err)
+	}
+}
+
 // TestListEveryHostShowsAHostColumn is `sonar list --host "*"`: every machine
 // in one table, with a HOST column that appears because there is more than one.
 func TestListEveryHostShowsAHostColumn(t *testing.T) {
