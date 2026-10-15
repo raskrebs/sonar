@@ -29,7 +29,7 @@ func checkDesktopInstalled(_ context.Context, env *Env) rpc.DoctorCheck {
 
 	cfg, _ := config.LoadFrom(env.ConfigPath)
 	recorded := cfg.Desktop
-	if recorded.InstalledPath != "" && exists(recorded.InstalledPath) {
+	if recorded.InstalledPath != "" && env.exists(recorded.InstalledPath) {
 		version := recorded.InstalledVersion
 		if version == "" {
 			version = "an unrecorded version"
@@ -72,7 +72,7 @@ func installedElsewhere(env *Env) (string, bool) {
 		GOOS:     env.GOOS,
 		Home:     env.Home,
 		Getenv:   func(string) string { return "" },
-		Exists:   exists,
+		Exists:   env.exists,
 		LookPath: env.LookPath,
 	})
 	if d.Kind == tray.KindDesktopApp {
