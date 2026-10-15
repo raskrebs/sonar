@@ -635,6 +635,62 @@ services:
 	}
 }
 
+// TestADependentOfAFailedServiceFailsAtOnce: a service that could not be
+// started is not going to open its port, so the ones that wait for it are
+// refused then and there, all the way down the chain — not after a dependency
+// timeout each. The timeout is left at its real thirty seconds so that waiting
+// it out would fail this test's own deadline.
+func TestADependentOfAFailedServiceFailsAtOnce(t *testing.T) {
+	skipOnWindows(t)
+	dir := isolate(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	dbPort, apiPort, webPort := freePort(t), freePort(t), freePort(t)
+	path := writeConfig(t, dir, fmt.Sprintf(`name: itest
+services:
+  - name: db
+    cmd: sonar-test-no-such-command
+    port: %d
+  - name: api
+    cmd: %s
+    port: %d
+    depends_on: [db]
+  - name: web
+    cmd: %s
+    port: %d
+    depends_on: [api]
+`, dbPort, serviceCmd(t), apiPort, serviceCmd(t), webPort))
+
+	c := startDaemon(t, ctx, dir, []int{dbPort, apiPort, webPort})
+
+	var start rpc.GroupsStartResult
+	s, err := c.Stream(ctx, "groups.start", rpc.GroupsStartParams{ConfigPath: &path}, &start)
+	if err != nil {
+		t.Fatalf("groups.start: %v", err)
+	}
+	defer s.Close()
+
+	chunks, end := collect(t, s)
+	if len(chunks) != 3 {
+		t.Fatalf("chunks = %+v, want one per service", chunks)
+	}
+	if chunks[0].Service != "db" || chunks[0].Error == "" {
+		t.Fatalf("db chunk = %+v, want the spawn error", chunks[0])
+	}
+	for i, want := range []struct{ service, dep string }{{"api", "db"}, {"web", "api"}} {
+		got := chunks[i+1]
+		if got.Service != want.service || !strings.Contains(got.Error, "not started") ||
+			!strings.Contains(got.Error, want.dep) {
+			t.Errorf("%s chunk = %+v, want it refused for %s", want.service, got, want.dep)
+		}
+	}
+	if len(end.Started) != 0 || len(end.Errors) != 3 {
+		t.Fatalf("end = %+v, want three errors and nothing started", end)
+	}
+}
+
 // TestOnlyFiltersAndReportsATypo.
 func TestOnlyFiltersAndReportsATypo(t *testing.T) {
 	skipOnWindows(t)
