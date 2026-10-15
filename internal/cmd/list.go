@@ -258,10 +258,6 @@ type listQuery struct {
 	ipVersion string
 }
 
-// listPorts returns the rows to render. It reads through the daemon when one is
-// reachable (autostarting it, contract §7) and falls back to a direct scan with
-// a one-line note otherwise. The group index is only built on the direct path;
-// through the daemon the tree view derives what it needs from the rows.
 // daemonStatuses replaces each group's status with the daemon's own, when one
 // is running. The tree's groups are rebuilt here from the rows on screen, which
 // is right for what to draw and wrong for whether the project is up: only the
@@ -292,6 +288,10 @@ func daemonStatuses(ctx context.Context, tree []state.Group) {
 	}
 }
 
+// listPorts returns the rows to render. It reads through the daemon when one is
+// reachable (autostarting it, contract §7) and falls back to a direct scan with
+// a one-line note otherwise. The group index is only built on the direct path;
+// through the daemon the tree view derives what it needs from the rows.
 func listPorts(ctx context.Context, q listQuery) ([]ports.ListeningPort, *groups.Index, error) {
 	if hostFlag != "" && q.session != "" {
 		return nil, nil, errors.New("--session and --host cannot be combined: a session is local daemon state")

@@ -195,7 +195,7 @@ func services(cfg *Config, group string, member []state.Port, hints PortHints, e
 		// A service that declares no port has no listener to be joined to, so
 		// its run being alive is all there is to go on. One that does declare a
 		// port is not up until it listens, however alive its process is.
-		if !svc.Running && s.Port == 0 && !s.PortAuto && live != nil && live.ServiceLive(group, s.Name) {
+		if !svc.Running && !s.HasPort() && live != nil && live.ServiceLive(group, s.Name) {
 			svc.Running = true
 		}
 		// A service that is down says how its last run ended, when sonar was
