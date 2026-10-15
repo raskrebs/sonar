@@ -657,7 +657,8 @@ sonar info 3000 --host hetzner
 ```
 
 A registered host runs the same daemon, and the daemon on this machine keeps
-one SSH connection to it — `ssh <target> sonar daemon stdio` — and multiplexes
+one SSH connection to it — `ssh <target> sonar daemon stdio`, looking in
+`~/.local/bin` before the remote `PATH` — and multiplexes
 what it reports into the state every client already reads. Nothing new listens
 anywhere: the remote daemon's socket stays private to the SSH user, and clients
 never speak SSH themselves.
@@ -670,7 +671,9 @@ localhost unless it asks for more (`state.subscribe {"hosts": ["*"]}`).
 
 The target goes to `ssh` untouched, so `~/.ssh/config` aliases, `ProxyJump` and
 identities all apply; `--ssh-arg`, `--identity` and `--port` cover what a config
-does not. sonar stores no password and no key. A host that goes away keeps its
+does not, and `--remote-bin` names a sonar that is somewhere else. The default
+command runs through `sh`, so a Windows host, whose sonar comes from the
+PowerShell installer, needs `--remote-bin sonar`. sonar stores no password and no key. A host that goes away keeps its
 row and its status while the daemon retries, backing off from one second to
 thirty for as long as it stays registered.
 

@@ -40,7 +40,8 @@ const defaultBinDir = "$HOME/.local/bin"
 // With no binary named it looks in ~/.local/bin first and then on the remote
 // PATH. That goes through `sh -c` because the user's login shell runs whatever
 // ssh is given, and it need not be a POSIX one. A named binary is run as
-// written.
+// written. extra goes inside the single quotes as it is, so it must be
+// shell-safe and hold no quote of its own; every caller passes constants.
 func FarCommand(bin string, extra ...string) string {
 	command := RemoteCommand
 	if len(extra) > 0 {

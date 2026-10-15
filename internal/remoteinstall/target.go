@@ -78,7 +78,7 @@ func ParsePlatform(uname string) (Platform, error) {
 		p.OS = "darwin"
 	case hasAnyPrefixFold(kernel, "mingw", "msys", "cygwin", "windows"):
 		return Platform{}, &UnsupportedPlatformError{Kernel: kernel, Machine: machine,
-			Reason: "Windows hosts are not supported yet; install sonar there with the PowerShell installer"}
+			Reason: "Windows hosts are not supported yet; install sonar there with the PowerShell installer, then `sonar remote add` it with `--remote-bin sonar`"}
 	default:
 		return Platform{}, &UnsupportedPlatformError{Kernel: kernel, Machine: machine,
 			Reason: "only Linux and macOS hosts are supported"}

@@ -131,7 +131,7 @@ func (r runner) stdio(ctx context.Context, remoteCmd string) (io.ReadWriteCloser
 	return &stdioSession{cmd: cmd, in: stdin, out: stdout, errs: &stderr, target: r.target}, nil
 }
 
-// stdioSession is one `ssh <target> sonar daemon stdio` seen as a stream.
+// stdioSession is one `ssh <target> <remote.FarCommand>` seen as a stream.
 type stdioSession struct {
 	cmd    *exec.Cmd
 	in     io.WriteCloser

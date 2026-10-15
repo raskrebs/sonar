@@ -174,7 +174,7 @@ type daemonStatus struct {
 
 // check runs the post-install verification and fills in the result.
 //
-// It is a real `daemon.hello` over `ssh <target> sonar daemon stdio` — the same
+// It is a real `daemon.hello` over `ssh <target> <remote.FarCommand>` — the same
 // session the bridge opens — so what it proves is what the next thing to happen
 // actually needs: the binary runs, its daemon is up, and it speaks a protocol
 // major this build can talk to. `daemon status --json` over a second ssh

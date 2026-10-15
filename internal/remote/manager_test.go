@@ -482,6 +482,12 @@ func TestSSHArgs(t *testing.T) {
 	if bare[len(bare)-1] != def {
 		t.Errorf("remote command = %q, want %q", bare[len(bare)-1], def)
 	}
+
+	// A named binary is run as written, with no sh around it: that is what a
+	// Windows host, whose shell is not a POSIX one, relies on.
+	if got, want := FarCommand("sonar", "--no-autostart"), "sonar daemon stdio --no-autostart"; got != want {
+		t.Errorf("FarCommand with a named binary = %q, want %q", got, want)
+	}
 }
 
 // TestFarCommandFindsAnInstallOffThePATH runs the default command the way the
