@@ -26,6 +26,9 @@ type Runtime struct {
 	Logger     *slog.Logger
 	Scanner    *scanner.Loop
 
+	// ClaimTTL is the life of a port claim whose call names no ttl
+	// (`claims.ttl`). Zero means claims.DefaultTTL.
+	ClaimTTL time.Duration
 	// Store is the daemon's SQLite database: renames, group pins, the port
 	// history ring and the known `sonar.yaml` roots. Nil when the database
 	// could not be opened; every user of it must cope with that.

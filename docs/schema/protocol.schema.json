@@ -525,6 +525,9 @@
         "stats_interval_ms": {
           "type": "integer"
         },
+        "claim_ttl_ms": {
+          "type": "integer"
+        },
         "scans": {
           "type": "integer"
         },
@@ -541,6 +544,7 @@
         "scan_interval_ms",
         "scan_base_interval_ms",
         "stats_interval_ms",
+        "claim_ttl_ms",
         "scans",
         "db_path"
       ]

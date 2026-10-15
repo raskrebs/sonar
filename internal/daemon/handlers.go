@@ -99,6 +99,7 @@ func handleStatus(_ context.Context, req *Request) (any, error) {
 		ScanIntervalMs:     st.IntervalMs,
 		ScanBaseIntervalMs: st.BaseIntervalMs,
 		StatsIntervalMs:    st.StatsIntervalMs,
+		ClaimTTLMs:         int(claimTTLInEffect(rt).Milliseconds()),
 		Scans:              st.Scans,
 		DBPath:             rt.DBPath(),
 	}, nil

@@ -57,9 +57,6 @@ const (
 	DefaultHistoryLimit = 50
 )
 
-// DefaultClaimTTLSeconds is `claim_port`'s reservation life: one day (spec 2 §4).
-const DefaultClaimTTLSeconds = 86400
-
 // ---------------------------------------------------------------- inputs ---
 
 // WaitForPortInput is the argument set of wait_for_port.
@@ -91,7 +88,7 @@ type ClaimPortInput struct {
 	Project    string `json:"project,omitempty" jsonschema:"The project the ports belong to. Defaults to the git checkout containing this server's working directory."`
 	Worktree   string `json:"worktree,omitempty" jsonschema:"The worktree the ports belong to. Defaults to this checkout's worktree, or main for a primary checkout."`
 	Count      int    `json:"count,omitempty" jsonschema:"How many ports to reserve. Defaults to the project's worktree_ports from sonar.yaml, or 1 when it sets none."`
-	TTLSeconds int64  `json:"ttl_seconds,omitempty" jsonschema:"How long the reservation lives, in seconds. Defaults to 86400 (one day). Claiming again refreshes it."`
+	TTLSeconds int64  `json:"ttl_seconds,omitempty" jsonschema:"How long the reservation lives, in seconds. Defaults to the daemon's claims.ttl setting, or 86400 (one day) when it sets none. Claiming again refreshes it."`
 	Release    bool   `json:"release,omitempty" jsonschema:"Give this key's ports back instead of claiming. Do this when the work is finished."`
 }
 
@@ -419,16 +416,12 @@ func (s *Server) claimPort(ctx context.Context, _ *mcp.CallToolRequest, in Claim
 		}, out, nil
 	}
 
-	ttl := in.TTLSeconds
-	if ttl == 0 {
-		ttl = DefaultClaimTTLSeconds
-	}
 	var res rpc.ClaimsAcquireResult
 	if err := s.daemon.Call(ctx, "claims.acquire", rpc.ClaimsAcquireParams{
 		Project:    project,
 		Worktree:   worktree,
 		Count:      in.Count,
-		TTLSeconds: ttl,
+		TTLSeconds: in.TTLSeconds,
 	}, &res); err != nil {
 		return s.failed(err)
 	}

@@ -127,6 +127,9 @@ type DaemonStatusResult struct {
 	// needs a daemon restart and these are how you check that it took.
 	ScanBaseIntervalMs int `json:"scan_base_interval_ms"`
 	StatsIntervalMs    int `json:"stats_interval_ms"`
+	// ClaimTTLMs is the life of a port claim whose call names no ttl, as
+	// `claims.ttl` set it or the default.
+	ClaimTTLMs int `json:"claim_ttl_ms"`
 	// Scans counts the port scans this daemon has run. Two clients reading
 	// through the daemon must not make it grow faster than one does.
 	Scans  int64  `json:"scans"`
@@ -767,7 +770,8 @@ type RunsSpawnResult struct {
 //
 // TTLSeconds is the spec's field and wins; TTLMs is kept because the generated
 // schema has always carried it and every other duration on this wire is in
-// milliseconds. Neither set means DefaultTTL (24h).
+// milliseconds. Neither set means the daemon's default: `claims.ttl` from its
+// config, else DefaultTTL (24h).
 //
 // An omitted Count takes the worktree_ports of the project's `sonar.yaml`
 // when the daemon knows one that sets it, and one port otherwise; an explicit

@@ -53,6 +53,7 @@ func (f *Fake) handleStatus(json.RawMessage) (any, error) {
 		ScanIntervalMs:     2000,
 		ScanBaseIntervalMs: 2000,
 		StatsIntervalMs:    1000,
+		ClaimTTLMs:         86400000,
 		Scans:              1,
 	}, nil
 }

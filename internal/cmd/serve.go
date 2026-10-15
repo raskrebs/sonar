@@ -74,6 +74,7 @@ func serveRun(cmd *cobra.Command, _ []string) error {
 		IdleTimeout:   loadedConfig.Daemon.ResolvedIdleTimeout(),
 		StatsInterval: loadedConfig.Daemon.ResolvedStatsInterval(),
 		ScanInterval:  loadedConfig.Daemon.ResolvedScanInterval(),
+		ClaimTTL:      loadedConfig.Claims.ResolvedTTL(),
 		Logger:        logger,
 	})
 
