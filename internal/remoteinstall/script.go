@@ -5,9 +5,10 @@ import (
 	"text/template"
 )
 
-// BinDir and BinPath are where the remote binary lands. `~/.local/bin` is on
-// the default PATH of every distribution sonar targets and needs no root, which
-// is the whole point: `sonar remote install` must not ask for sudo.
+// BinDir and BinPath are where the remote binary lands. `~/.local/bin` needs no
+// root, which is the whole point: `sonar remote install` must not ask for sudo.
+// It is not reliably on the PATH of the shell ssh runs a command in, so the
+// bridge looks there itself (remote.FarCommand).
 const (
 	BinDir  = "$HOME/.local/bin"
 	BinPath = "$HOME/.local/bin/sonar"

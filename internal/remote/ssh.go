@@ -22,9 +22,36 @@ type Dialer func(ctx context.Context, h Host) (io.ReadWriteCloser, error)
 const RemoteCommand = "daemon stdio"
 
 // DefaultRemoteBinary is the binary the far side runs when the host config
-// does not name one. It is resolved by the login shell's PATH, which is why
-// `sonar remote install` puts it in ~/.local/bin.
+// does not name one.
 const DefaultRemoteBinary = "sonar"
+
+// defaultBinDir is where `sonar remote install` puts the binary. It is added
+// to the far side's PATH for the default binary, because the shell ssh runs a
+// command in is neither a login shell nor an interactive one: on a stock
+// Debian or Ubuntu it reads no file that would put ~/.local/bin on PATH, so a
+// bare `sonar` is "command not found" on a host the install just set up.
+const defaultBinDir = "$HOME/.local/bin"
+
+// FarCommand is the command line ssh is asked to run on the far side: the
+// host's `sonar daemon stdio`, plus any extra flags. The bridge and the
+// install's final check both build it here, so a check that passes proves the
+// bridge will connect.
+//
+// With no binary named it looks in ~/.local/bin first and then on the remote
+// PATH. That goes through `sh -c` because the user's login shell runs whatever
+// ssh is given, and it need not be a POSIX one. A named binary is run as
+// written. extra goes inside the single quotes as it is, so it must be
+// shell-safe and hold no quote of its own; every caller passes constants.
+func FarCommand(bin string, extra ...string) string {
+	command := RemoteCommand
+	if len(extra) > 0 {
+		command += " " + strings.Join(extra, " ")
+	}
+	if bin = strings.TrimSpace(bin); bin != "" {
+		return bin + " " + command
+	}
+	return `sh -c 'PATH="` + defaultBinDir + `:$PATH"; exec ` + DefaultRemoteBinary + " " + command + `'`
+}
 
 // SSHArgs builds the argument list for one host, in the order `ssh` wants it:
 // options first, then the target, then the remote command. The user's own
@@ -43,16 +70,8 @@ func SSHArgs(h Host) []string {
 		args = append(args, "-i", expandHome(h.Identity))
 	}
 	args = append(args, h.SSHArgs...)
-	args = append(args, h.Target, RemoteBinary(h)+" "+RemoteCommand)
+	args = append(args, h.Target, FarCommand(h.RemoteBin))
 	return args
-}
-
-// RemoteBinary is the sonar to run on the far side.
-func RemoteBinary(h Host) string {
-	if strings.TrimSpace(h.RemoteBin) == "" {
-		return DefaultRemoteBinary
-	}
-	return strings.TrimSpace(h.RemoteBin)
 }
 
 // expandHome turns a leading ~ into the user's home directory. `ssh -i` does

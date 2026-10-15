@@ -51,7 +51,7 @@ func init() {
 	remoteAddCmd.Flags().StringArrayVar(&remoteAddSSHArgs, "ssh-arg", nil,
 		"Extra argument for ssh; repeat for each one")
 	remoteAddCmd.Flags().StringVar(&remoteAddBinary, "remote-bin", "",
-		"Path to sonar on the remote host (default: sonar, from its PATH)")
+		"Path to sonar on the remote host (default: ~/.local/bin/sonar, then sonar on its PATH; run through sh, so a Windows host needs this set)")
 	remoteAddCmd.Flags().BoolVar(&remoteAddJSON, "json", false, "Output as JSON")
 	remoteCmd.AddCommand(remoteAddCmd)
 }

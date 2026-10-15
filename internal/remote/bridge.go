@@ -162,7 +162,7 @@ func (b *bridge) client() (*client.Client, error) {
 			detail += ": " + *reason
 		}
 		return nil, rpc.NewError(rpc.CodeNotFound, detail,
-			"`sonar remote list` shows the connection; `sonar remote install "+b.cfg.Name+"` puts a daemon on it")
+			"`sonar remote list` shows the connection; `sonar remote install "+b.cfg.Name+"` puts a daemon on it, and `remote_bin` names a sonar that is somewhere else")
 	}
 	return cli, nil
 }
