@@ -57,6 +57,11 @@ type Record struct {
 	// stopping is set when sonar is about to stop this run, so its exit is
 	// recorded as stopped rather than a crash.
 	stopping bool
+	// reaped is set on a run this daemon spawned and waits on. Its reaper
+	// records the exit, so Prune leaves it alone: a prune that ran between the
+	// wait returning and the exit being recorded would drop the run and lose
+	// how it ended.
+	reaped bool
 }
 
 // Registry holds the live runs. The zero value is not usable; call New.
@@ -180,7 +185,8 @@ func (r *Registry) Lookup(pid int) (Record, bool) {
 
 // Prune drops every run whose process has exited. The scanner calls it each
 // tick; List and the resolver call it too, so a stale run never survives a
-// read.
+// read. A run this daemon reaps itself is left to its reaper, which records
+// how it ended.
 func (r *Registry) Prune() {
 	alive := r.Alive
 	if alive == nil {
@@ -189,8 +195,8 @@ func (r *Registry) Prune() {
 
 	r.mu.Lock()
 	var dead []int
-	for pid := range r.runs {
-		if !alive(pid) {
+	for pid, rec := range r.runs {
+		if !rec.reaped && !alive(pid) {
 			dead = append(dead, pid)
 		}
 	}

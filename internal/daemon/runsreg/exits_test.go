@@ -8,6 +8,28 @@ import (
 	"testing"
 )
 
+// TestAPruneBeforeTheReaperKeepsTheExit: the reaper's wait returns, then a
+// prune sees the pid gone before the reaper records the exit. The run must
+// still be there for it, or how it ended is lost.
+func TestAPruneBeforeTheReaperKeepsTheExit(t *testing.T) {
+	r := testRegistry() // nothing alive: the process has been reaped
+	r.Register(Record{ID: "a", PID: 7, Group: "g", Name: "job", reaped: true})
+	r.Register(Record{ID: "b", PID: 8, Group: "g", Name: "adopted"})
+
+	r.Prune()
+
+	if _, ok := r.Lookup(8); ok {
+		t.Fatal("a dead run nobody reaps should be pruned")
+	}
+	e, ok := r.Exited(7, 3, false)
+	if !ok {
+		t.Fatal("the prune dropped a run its reaper had yet to record")
+	}
+	if e.Reason != ReasonCrashed || e.Code != 3 {
+		t.Fatalf("exit = %+v, want a crash with code 3", e)
+	}
+}
+
 // TestExitedRecordsHowARunEnded: code 0 exited, anything else crashed, and a
 // run sonar was stopping is stopped whatever its code.
 func TestExitedRecordsHowARunEnded(t *testing.T) {

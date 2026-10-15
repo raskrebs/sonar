@@ -247,6 +247,7 @@ func Spawn(ctx context.Context, rt *daemon.Runtime, req spawn.Request, meta Meta
 		Origin:     meta.Origin,
 		LogPath:    h.LogPath,
 		LogOffset:  h.LogOffset,
+		reaped:     true,
 	})
 	rememberSession(rt, h.Session)
 	rt.Logger.Info("spawned a run",
