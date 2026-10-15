@@ -70,6 +70,22 @@ func TestPruneDropsDeadRuns(t *testing.T) {
 	}
 }
 
+func TestServiceLiveAsksOnlyAboutThatServicesRuns(t *testing.T) {
+	r := testRegistry(100)
+	r.Register(Record{ID: "a", PID: 100, Group: "g", Name: "worker"})
+	r.Register(Record{ID: "b", PID: 999, Group: "g", Name: "gone"})
+
+	if !r.ServiceLive("g", "worker") {
+		t.Fatal("a service whose run is alive should be live")
+	}
+	if r.ServiceLive("g", "gone") {
+		t.Fatal("a service whose run has exited should not be live")
+	}
+	if r.ServiceLive("other", "worker") {
+		t.Fatal("a run in another group should not make the service live")
+	}
+}
+
 func TestRunAttributesAPortByItsPPIDAncestry(t *testing.T) {
 	r := testRegistry(100)
 	r.Register(Record{ID: "a", PID: 100, Group: "itest", Name: "web"})

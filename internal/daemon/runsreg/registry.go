@@ -244,6 +244,34 @@ func (r *Registry) PortHint(group, service string) (int, bool) {
 	return 0, false
 }
 
+// ServiceLive implements groups.LiveRuns: whether a run started under this
+// service's name is still alive. It is how a service with no port is known to
+// be up. It checks only this service's runs, not the whole registry: it is
+// asked once per portless service on every scan, and pruning is left to its
+// own ticker.
+func (r *Registry) ServiceLive(group, service string) bool {
+	alive := r.Alive
+	if alive == nil {
+		alive = runs.PIDAlive
+	}
+
+	r.mu.Lock()
+	var pids []int
+	for pid, rec := range r.runs {
+		if rec.Group == group && rec.Name == service {
+			pids = append(pids, pid)
+		}
+	}
+	r.mu.Unlock()
+
+	for _, pid := range pids {
+		if alive(pid) {
+			return true
+		}
+	}
+	return false
+}
+
 // GroupPIDs lists the live runs recorded under a group, so `sonar down` can
 // stop the ones that hold no port — a worker, or a service still starting —
 // which a kill by port never reaches.

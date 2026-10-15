@@ -109,7 +109,11 @@ func listRun(cmd *cobra.Command, args []string) error {
 		if index == nil {
 			index = observeConfigs(results)
 		}
-		display.RenderTree(os.Stdout, results, groups.Groups(state.FromListeningAll(results), index))
+		tree := groups.Groups(state.FromListeningAll(results), index)
+		if hostFlag == "" {
+			daemonStatuses(cmd.Context(), tree)
+		}
+		display.RenderTree(os.Stdout, results, tree)
 		return nil
 	}
 
@@ -252,6 +256,36 @@ type listQuery struct {
 	group     string
 	session   string
 	ipVersion string
+}
+
+// daemonStatuses replaces each group's status with the daemon's own, when one
+// is running. The tree's groups are rebuilt here from the rows on screen, which
+// is right for what to draw and wrong for whether the project is up: only the
+// daemon knows that a service with no port is running, and a filter that hides
+// half a project's ports must not make it read as half down. With no daemon the
+// groups keep the status the rows gave them.
+func daemonStatuses(ctx context.Context, tree []state.Group) {
+	if noDaemonFlag {
+		return
+	}
+	c, err := dialDaemon(ctx)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	var snap state.Snapshot
+	if err := c.Call(ctx, "state.snapshot", rpc.StateSnapshotParams{}, &snap); err != nil {
+		return
+	}
+	status := make(map[string]string, len(snap.Groups))
+	for _, g := range snap.Groups {
+		status[g.Name] = g.Status
+	}
+	for i := range tree {
+		if s, ok := status[tree[i].Name]; ok && s != "" {
+			tree[i].Status = s
+		}
+	}
 }
 
 // listPorts returns the rows to render. It reads through the daemon when one is
