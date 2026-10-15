@@ -182,6 +182,9 @@ func TestStreamCancelStopsTheProducer(t *testing.T) {
 			if err := json.Unmarshal(m.Params, &end); err != nil {
 				t.Fatalf("decoding stream.end: %v", err)
 			}
+			if end.ID != start.SubscriptionID {
+				t.Fatalf("stream.end id = %q, want %q", end.ID, start.SubscriptionID)
+			}
 			sawTheEnd = true
 		}
 	}
