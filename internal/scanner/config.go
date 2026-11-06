@@ -97,7 +97,7 @@ func (l *Loop) reloadLocked() (int, []groups.InvalidConfig) {
 		if err != nil {
 			l.opts.Logger.Warn("reading known sonar.yaml roots", "error", err)
 		}
-		roots = known
+		roots = l.liveRoots(st, known)
 	}
 	return l.index().Reload(roots)
 }

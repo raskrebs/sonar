@@ -19,6 +19,7 @@ type Store interface {
 	Pins() (map[string]string, error)
 	Roots() ([]string, error)
 	AddRoot(path string) error
+	RemoveRoot(path string) error
 	AppendBatch(events []store.HistoryEvent) error
 	GroupAliases() (map[string]string, error)
 }
@@ -141,7 +142,7 @@ func (l *Loop) seedRoots(st Store) {
 		l.opts.Logger.Warn("reading known sonar.yaml roots", "error", err)
 		return
 	}
-	for _, root := range roots {
+	for _, root := range l.liveRoots(st, roots) {
 		l.attr.roots[root] = true
 		l.attr.index.Observe(root)
 	}
