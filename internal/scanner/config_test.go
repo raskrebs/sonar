@@ -47,17 +47,18 @@ func TestScanPicksUpAnEditedConfig(t *testing.T) {
 
 // TestReloadConfigsPicksUpANewFile is `groups.reload` at the scanner level: a
 // root the store remembers is re-read even though no process has been seen in
-// it yet.
+// it yet. The root is added after the first scan: one that holds no config
+// when the daemon starts is forgotten as dead.
 func TestReloadConfigsPicksUpANewFile(t *testing.T) {
 	st := openStore(t)
 	dir := resolved(t, t.TempDir())
-	if err := st.AddRoot(dir); err != nil {
-		t.Fatal(err)
-	}
 
 	l := loopWith(st)
 	if _, err := l.Snapshot(Include{}); err != nil {
 		t.Fatalf("Snapshot: %v", err)
+	}
+	if err := st.AddRoot(dir); err != nil {
+		t.Fatal(err)
 	}
 	if got := len(l.Configs()); got != 0 {
 		t.Fatalf("configs = %d, want none before the file exists", got)
