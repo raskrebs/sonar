@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/raskrebs/sonar/internal/ports"
@@ -37,6 +39,12 @@ var forwarderNames = []string{
 	"rootlesskit",
 	"rootlessport",
 	"slirp4netns",
+	// Lima's gRPC port forwarder: the host agent holds the port itself.
+	// Verified on macOS with Colima 0.10.3 started with
+	// `--port-forwarder grpc`: a container published with `-p 47312:80` is
+	// held by `limactl hostagent ... colima-<profile>`, which lsof reports as
+	// "limactl".
+	"limactl",
 }
 
 // minTruncatedName is the shortest prefix accepted as a truncated forwarder
@@ -62,7 +70,73 @@ func heldByForwarder(p *ports.ListeningPort) bool {
 	if name == "" {
 		return true
 	}
-	return isForwarderProcess(name)
+	if isForwarderProcess(name) {
+		return true
+	}
+	return isSSH(name) && isLimaSSHMaster(p.Command)
+}
+
+// Lima's default port forwarder, and so Colima's, is ssh: the instance's
+// ControlMaster holds every published port, and ssh retitles that process
+// "ssh: <instance dir>/ssh.sock [mux]". Verified on macOS with Colima 0.10.3:
+// a container published with `-p 47311:80` is held by a process lsof reports
+// as "ssh" and ps as "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]".
+// "ssh" is far too common a name to trust on its own (an `ssh -L` tunnel is
+// exactly the kind of native process #95 is about), so only that title counts.
+func isLimaSSHMaster(command string) bool {
+	command = strings.TrimSpace(command)
+	return strings.HasPrefix(command, "ssh: ") && strings.HasSuffix(command, "/ssh.sock [mux]")
+}
+
+// isSSH reports whether a scanner's process name is ssh. Read from the
+// retitled command line instead, the first word is "ssh:".
+func isSSH(name string) bool {
+	name = normalizeProcess(name)
+	return name == "ssh" || name == "ssh:"
+}
+
+// fillSSHCommands fills in, with one ps call, the command line of every ssh
+// process that holds a port the containers publish, so heldByForwarder can
+// tell Lima's ControlMaster from any other ssh. Container data is stamped
+// before ports.Enrich, so a scan's rows have no command line yet.
+func fillSSHCommands(pp []ports.ListeningPort, published map[int]*container) {
+	var pids []string
+	for i := range pp {
+		if _, ok := published[pp[i].Port]; ok && pp[i].Command == "" && pp[i].PID > 0 && isSSH(pp[i].Process) {
+			pids = append(pids, strconv.Itoa(pp[i].PID))
+		}
+	}
+	if len(pids) == 0 {
+		return
+	}
+	commands := processCommands(pids)
+	for i := range pp {
+		if c, ok := commands[pp[i].PID]; ok && pp[i].Command == "" {
+			pp[i].Command = c
+		}
+	}
+}
+
+// processCommands returns the command line of each pid, keyed by pid. It is a
+// variable so tests can answer for ps.
+var processCommands = func(pids []string) map[int]string {
+	out, err := exec.Command("ps", "-o", "pid=,command=", "-p", strings.Join(pids, ",")).Output()
+	if err != nil && len(out) == 0 {
+		return nil
+	}
+	commands := make(map[int]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		pid, command, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(pid)
+		if err != nil {
+			continue
+		}
+		commands[n] = strings.TrimSpace(command)
+	}
+	return commands
 }
 
 // isForwarderProcess reports whether a process name is one of Docker's port

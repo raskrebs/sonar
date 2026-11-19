@@ -80,6 +80,8 @@ func enrichFrom(pp []ports.ListeningPort, containers []container) {
 		}
 	}
 
+	fillSSHCommands(pp, hostPortMap)
+
 	for i := range pp {
 		c, ok := hostPortMap[pp[i].Port]
 		if !ok {
