@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/raskrebs/sonar/internal/ports"
@@ -80,12 +81,15 @@ func enrichFrom(pp []ports.ListeningPort, containers []container) {
 		}
 	}
 
+	fillForwarderCommands(pp, hostPortMap)
+	lima := sync.OnceValues(currentLimaInstance)
+
 	for i := range pp {
 		c, ok := hostPortMap[pp[i].Port]
 		if !ok {
 			continue
 		}
-		if !heldByForwarder(&pp[i]) {
+		if !heldByForwarder(&pp[i], lima) {
 			// The list says a container publishes this port, but a native
 			// process holds it. The list can be stale — the watcher keeps
 			// serving its last good one while Docker is not answering — and

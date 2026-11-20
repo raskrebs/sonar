@@ -1,6 +1,10 @@
 package docker
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/raskrebs/sonar/internal/ports"
@@ -54,7 +58,11 @@ const minTruncatedName = 8
 // where `netstat -ano` reports pids without names and ports.Enrich only fills
 // the names in after this pass — the check is inert there, and the behaviour
 // is exactly what it was before 5A.9.
-func heldByForwarder(p *ports.ListeningPort) bool {
+//
+// Lima and Colima forward through processes that any other Lima VM, or any
+// ssh, could also be running, so those count only when they belong to the
+// instance behind the current Docker context, which lima resolves.
+func heldByForwarder(p *ports.ListeningPort, lima func() (limaInstance, bool)) bool {
 	name := p.Process
 	if name == "" {
 		name = firstWord(p.Command)
@@ -62,7 +70,181 @@ func heldByForwarder(p *ports.ListeningPort) bool {
 	if name == "" {
 		return true
 	}
-	return isForwarderProcess(name)
+	if isForwarderProcess(name) {
+		return true
+	}
+	switch {
+	case isSSH(name):
+		inst, ok := lima()
+		return ok && inst.holdsSSHMaster(p.Command)
+	case isLimactl(name):
+		inst, ok := lima()
+		return ok && inst.holdsHostAgent(p.Command)
+	}
+	return false
+}
+
+// limaInstance is a Lima VM: its name and its instance directory, which holds
+// lima.yaml, the host agent's ha.sock and the ssh ControlMaster's ssh.sock.
+type limaInstance struct {
+	name string
+	dir  string
+}
+
+// Lima's default port forwarder, and so Colima's, is ssh: the instance's
+// ControlMaster holds every published port, and ssh retitles that process
+// "ssh: <instance dir>/ssh.sock [mux]". Verified on macOS with Colima 0.10.3:
+// a container published with `-p 47311:80` is held by a process lsof reports
+// as "ssh" and ps as "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]".
+// "ssh" is far too common a name to trust on its own (an `ssh -L` tunnel is
+// exactly the kind of native process #95 is about), and any ssh can name its
+// ControlPath ssh.sock, so only the master of this instance's directory counts.
+func (l limaInstance) holdsSSHMaster(command string) bool {
+	return strings.TrimSpace(command) == "ssh: "+filepath.Join(l.dir, "ssh.sock")+" [mux]"
+}
+
+// Lima's gRPC port forwarder is the host agent itself. Verified on macOS with
+// Colima 0.10.3: the agent runs as `limactl hostagent --pidfile <dir>/ha.pid
+// --socket <dir>/ha.sock ... <instance>`, which lsof reports as "limactl", and
+// with `--port-forwarder grpc` it holds the published ports. Another Lima VM
+// has its own agent, so the instance name and the agent's paths must match.
+func (l limaInstance) holdsHostAgent(command string) bool {
+	args := strings.Fields(command)
+	if len(args) < 3 || !isLimactl(args[0]) || args[1] != "hostagent" || args[len(args)-1] != l.name {
+		return false
+	}
+	for i := 2; i+1 < len(args)-1; i++ {
+		if (args[i] == "--pidfile" || args[i] == "--socket") && filepath.Dir(args[i+1]) != l.dir {
+			return false
+		}
+	}
+	return true
+}
+
+// limaInstanceFor maps a Docker endpoint to the Lima instance serving it, from
+// the socket's path alone:
+//
+//   - Lima: <LIMA_HOME>/<instance>/sock/docker.sock
+//   - Colima: <COLIMA_HOME>/<profile>/docker.sock, whose instance is
+//     <COLIMA_HOME>/_lima/colima for the default profile and
+//     <COLIMA_HOME>/_lima/colima-<profile> otherwise
+//
+// The directory must also look like a Lima instance, so an endpoint that only
+// happens to end in docker.sock (Docker's own /var/run/docker.sock) maps to
+// nothing.
+func limaInstanceFor(host string) (limaInstance, bool) {
+	sock, ok := strings.CutPrefix(host, "unix://")
+	if !ok || filepath.Base(sock) != "docker.sock" {
+		return limaInstance{}, false
+	}
+	dir := filepath.Dir(filepath.Clean(sock))
+	var inst limaInstance
+	if filepath.Base(dir) == "sock" {
+		inst.dir = filepath.Dir(dir)
+		inst.name = filepath.Base(inst.dir)
+	} else {
+		inst.name = "colima"
+		if profile := filepath.Base(dir); profile != "default" {
+			inst.name += "-" + profile
+		}
+		inst.dir = filepath.Join(filepath.Dir(dir), "_lima", inst.name)
+	}
+	if !isLimaInstanceDir(inst.dir) {
+		return limaInstance{}, false
+	}
+	return inst, true
+}
+
+// isLimaInstanceDir reports whether dir holds a Lima instance's config or its
+// running host agent's socket.
+func isLimaInstanceDir(dir string) bool {
+	for _, f := range []string{"lima.yaml", "ha.sock"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// currentDockerHost returns the endpoint of the current Docker context, the
+// one the container list came from. `docker context inspect` reads the CLI's
+// configuration only, so it answers while the daemon is wedged. It is a
+// variable so tests can answer for it.
+var currentDockerHost = func() string {
+	if host := os.Getenv("DOCKER_HOST"); host != "" {
+		return host
+	}
+	cmd, stop := cli("context", "inspect", "--format", "{{.Endpoints.docker.Host}}")
+	defer stop()
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// currentLimaInstance is the Lima instance behind the current Docker context,
+// if there is one.
+func currentLimaInstance() (limaInstance, bool) {
+	return limaInstanceFor(currentDockerHost())
+}
+
+// isSSH reports whether a scanner's process name is ssh. Read from the
+// retitled command line instead, the first word is "ssh:".
+func isSSH(name string) bool {
+	name = normalizeProcess(name)
+	return name == "ssh" || name == "ssh:"
+}
+
+// isLimactl reports whether a scanner's process name is Lima's limactl.
+func isLimactl(name string) bool {
+	return normalizeProcess(name) == "limactl"
+}
+
+// fillForwarderCommands fills in, with one ps call, the command line of every
+// ssh or limactl process that holds a port the containers publish, so
+// heldByForwarder can tell this instance's forwarder from any other. Container
+// data is stamped before ports.Enrich, so a scan's rows have no command line
+// yet.
+func fillForwarderCommands(pp []ports.ListeningPort, published map[int]*container) {
+	var pids []string
+	for i := range pp {
+		if _, ok := published[pp[i].Port]; ok && pp[i].Command == "" && pp[i].PID > 0 &&
+			(isSSH(pp[i].Process) || isLimactl(pp[i].Process)) {
+			pids = append(pids, strconv.Itoa(pp[i].PID))
+		}
+	}
+	if len(pids) == 0 {
+		return
+	}
+	commands := processCommands(pids)
+	for i := range pp {
+		if c, ok := commands[pp[i].PID]; ok && pp[i].Command == "" {
+			pp[i].Command = c
+		}
+	}
+}
+
+// processCommands returns the command line of each pid, keyed by pid. It is a
+// variable so tests can answer for ps.
+var processCommands = func(pids []string) map[int]string {
+	out, err := exec.Command("ps", "-o", "pid=,command=", "-p", strings.Join(pids, ",")).Output()
+	if err != nil && len(out) == 0 {
+		return nil
+	}
+	commands := make(map[int]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		pid, command, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(pid)
+		if err != nil {
+			continue
+		}
+		commands[n] = strings.TrimSpace(command)
+	}
+	return commands
 }
 
 // isForwarderProcess reports whether a process name is one of Docker's port
