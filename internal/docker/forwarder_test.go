@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,7 +27,7 @@ func TestIsForwarderProcess(t *testing.T) {
 		{"rootlesskit", true},            // rootless Docker
 		{"rootlessport", true},           // rootless Docker
 		{"slirp4netns", true},            // rootless Docker
-		{"limactl", true},                // Lima's gRPC forwarder (Colima --port-forwarder grpc)
+		{"limactl", false},               // Lima's host agent needs its command line too
 		{"/usr/bin/docker-proxy", true},  // a path, not a bare name
 		{`C:\Docker\vpnkit.exe`, true},   // a Windows path
 		{"node", false},                  // the native processes #95 is about
@@ -46,30 +48,65 @@ func TestIsForwarderProcess(t *testing.T) {
 	}
 }
 
+// limaFixture makes a Lima instance directory named name under a fresh home,
+// with the file a running instance has.
+func limaFixture(t *testing.T, name string) limaInstance {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "_lima", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "lima.yaml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return limaInstance{name: name, dir: dir}
+}
+
 func TestHeldByForwarder(t *testing.T) {
+	inst := limaInstance{name: "colima", dir: "/Users/me/.colima/_lima/colima"}
+	current := func() (limaInstance, bool) { return inst, true }
+	none := func() (limaInstance, bool) { return limaInstance{}, false }
+	agent := "/opt/homebrew/bin/limactl hostagent --pidfile /Users/me/.colima/_lima/colima/ha.pid " +
+		"--socket /Users/me/.colima/_lima/colima/ha.sock --guestagent /opt/homebrew/share/lima/lima-guestagent.Linux-aarch64.gz colima"
 	cases := []struct {
 		label string
 		row   ports.ListeningPort
+		lima  func() (limaInstance, bool)
 		want  bool
 	}{
-		{"forwarder by name", ports.ListeningPort{Process: "com.docke"}, true},
-		{"native by name", ports.ListeningPort{Process: "node"}, false},
-		{"the name wins over the command", ports.ListeningPort{Process: "node", Command: "/usr/bin/docker-proxy -proto tcp"}, false},
-		{"forwarder by command", ports.ListeningPort{Command: "/Applications/Docker.app/Contents/MacOS/com.docker.backend services"}, true},
-		{"forwarder by quoted command", ports.ListeningPort{Command: `"C:\Program Files\Docker\Docker\resources\com.docker.backend.exe" --x`}, true},
-		{"native by command", ports.ListeningPort{Command: "node server.js"}, false},
+		{"forwarder by name", ports.ListeningPort{Process: "com.docke"}, nil, true},
+		{"native by name", ports.ListeningPort{Process: "node"}, nil, false},
+		{"the name wins over the command", ports.ListeningPort{Process: "node", Command: "/usr/bin/docker-proxy -proto tcp"}, nil, false},
+		{"forwarder by command", ports.ListeningPort{Command: "/Applications/Docker.app/Contents/MacOS/com.docker.backend services"}, nil, true},
+		{"forwarder by quoted command", ports.ListeningPort{Command: `"C:\Program Files\Docker\Docker\resources\com.docker.backend.exe" --x`}, nil, true},
+		{"native by command", ports.ListeningPort{Command: "node server.js"}, nil, false},
 		// Windows' netstat names nothing before ports.Enrich: no evidence, so
 		// the cached list keeps applying.
-		{"owner unknown", ports.ListeningPort{PID: 4242}, true},
+		{"owner unknown", ports.ListeningPort{PID: 4242}, nil, true},
 		// Lima and Colima forward through the instance's ssh ControlMaster.
-		{"lima ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]"}, true},
-		{"lima ssh master by command", ports.ListeningPort{Command: "ssh: /home/me/.lima/default/ssh.sock [mux]"}, true},
-		{"ssh tunnel", ports.ListeningPort{Process: "ssh", Command: "ssh -N -L 3000:localhost:3000 dev"}, false},
-		{"other ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.ssh/cm-me@dev:22 [mux]"}, false},
-		{"ssh without a command line", ports.ListeningPort{Process: "ssh"}, false},
+		{"lima ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]"}, current, true},
+		{"lima ssh master by command", ports.ListeningPort{Command: "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]"}, current, true},
+		{"another instance's ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.colima/_lima/colima-dev/ssh.sock [mux]"}, current, false},
+		{"plain Lima VM's ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.lima/default/ssh.sock [mux]"}, current, false},
+		{"ssh master named ssh.sock", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.ssh/work/ssh.sock [mux]"}, current, false},
+		{"lima ssh master, Docker not on Lima", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]"}, none, false},
+		{"ssh tunnel", ports.ListeningPort{Process: "ssh", Command: "ssh -N -L 3000:localhost:3000 dev"}, current, false},
+		{"other ssh master", ports.ListeningPort{Process: "ssh", Command: "ssh: /Users/me/.ssh/cm-me@dev:22 [mux]"}, current, false},
+		{"ssh without a command line", ports.ListeningPort{Process: "ssh"}, current, false},
+		// Lima's gRPC forwarder is the instance's host agent.
+		{"lima host agent", ports.ListeningPort{Process: "limactl", Command: agent}, current, true},
+		{"another instance's host agent", ports.ListeningPort{Process: "limactl", Command: strings.ReplaceAll(agent, "colima", "colima-dev")}, current, false},
+		{"same name, other LIMA_HOME", ports.ListeningPort{Process: "limactl", Command: strings.ReplaceAll(agent, "/Users/me/.colima/_lima/", "/Users/me/.lima/")}, current, false},
+		{"limactl, not the host agent", ports.ListeningPort{Process: "limactl", Command: "limactl shell colima"}, current, false},
+		{"host agent, Docker not on Lima", ports.ListeningPort{Process: "limactl", Command: agent}, none, false},
+		{"limactl without a command line", ports.ListeningPort{Process: "limactl"}, current, false},
 	}
 	for _, c := range cases {
-		if got := heldByForwarder(&c.row); got != c.want {
+		lima := c.lima
+		if lima == nil {
+			lima = none
+		}
+		if got := heldByForwarder(&c.row, lima); got != c.want {
 			t.Errorf("%s: heldByForwarder = %v, want %v", c.label, got, c.want)
 		}
 	}
@@ -98,11 +135,25 @@ func TestEnrichSkipsAPortANativeProcessHolds(t *testing.T) {
 }
 
 // TestEnrichKeepsLimaForwardedPorts is issue #98: Colima and Lima publish a
-// container's port through ssh, which a scan reports with no command line.
+// container's port through ssh or the host agent, which a scan reports with no
+// command line. Only the forwarder of the instance behind the current Docker
+// context counts.
 func TestEnrichKeepsLimaForwardedPorts(t *testing.T) {
+	inst := limaFixture(t, "colima")
+	other := limaFixture(t, "colima-dev")
+	home := filepath.Dir(filepath.Dir(inst.dir))
+	if err := os.MkdirAll(filepath.Join(home, "default"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origHost := currentDockerHost
+	currentDockerHost = func() string { return "unix://" + filepath.Join(home, "default", "docker.sock") }
+	t.Cleanup(func() { currentDockerHost = origHost })
+
 	commands := map[int]string{
-		77: "ssh: /Users/me/.colima/_lima/colima/ssh.sock [mux]",
+		77: "ssh: " + filepath.Join(inst.dir, "ssh.sock") + " [mux]",
 		78: "ssh -N -L 3001:localhost:3001 dev",
+		80: "limactl hostagent --pidfile " + filepath.Join(inst.dir, "ha.pid") + " --socket " + filepath.Join(inst.dir, "ha.sock") + " colima",
+		81: "ssh: " + filepath.Join(other.dir, "ssh.sock") + " [mux]",
 	}
 	var asked [][]string
 	orig := processCommands
@@ -112,17 +163,18 @@ func TestEnrichKeepsLimaForwardedPorts(t *testing.T) {
 	}
 	t.Cleanup(func() { processCommands = orig })
 
-	containers := parsePS([]byte("web\tnginx:itest\t0.0.0.0:3000->80/tcp, 0.0.0.0:3001->81/tcp\t\t\t\n"))
+	containers := parsePS([]byte("web\tnginx:itest\t0.0.0.0:3000->80/tcp, 0.0.0.0:3001->81/tcp, 0.0.0.0:3003->82/tcp\t\t\t\n"))
 	pp := []ports.ListeningPort{
 		{Port: 3000, PID: 77, Process: "ssh"},
 		{Port: 3001, PID: 78, Process: "ssh"},
 		{Port: 3002, PID: 79, Process: "ssh"}, // no container publishes it
 		{Port: 3000, PID: 80, Process: "limactl"},
+		{Port: 3003, PID: 81, Process: "ssh"}, // another Colima profile's VM
 	}
 	enrichFrom(pp, containers)
 
-	if len(asked) != 1 || strings.Join(asked[0], ",") != "77,78" {
-		t.Errorf("ps was asked for %v, want one call for 77,78", asked)
+	if len(asked) != 1 || strings.Join(asked[0], ",") != "77,78,80,81" {
+		t.Errorf("ps was asked for %v, want one call for 77,78,80,81", asked)
 	}
 	if p := pp[0]; p.Type != ports.PortTypeDocker || p.DockerContainer != "web" || p.DockerContainerPort != 80 {
 		t.Errorf("the port Lima's ssh master holds lost its container data: %+v", p)
@@ -132,5 +184,43 @@ func TestEnrichKeepsLimaForwardedPorts(t *testing.T) {
 	}
 	if p := pp[3]; p.Type != ports.PortTypeDocker || p.DockerContainer != "web" {
 		t.Errorf("the port Lima's host agent holds lost its container data: %+v", p)
+	}
+	if p := pp[4]; p.Type == ports.PortTypeDocker || p.DockerContainer != "" {
+		t.Errorf("a port another Lima VM holds was stamped from the container list: %+v", p)
+	}
+}
+
+func TestLimaInstanceFor(t *testing.T) {
+	colima := limaFixture(t, "colima")
+	colimaHome := filepath.Dir(filepath.Dir(colima.dir))
+	dev := limaInstance{name: "colima-dev", dir: filepath.Join(colimaHome, "_lima", "colima-dev")}
+	if err := os.MkdirAll(dev.dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dev.dir, "ha.sock"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plain := limaFixture(t, "docker")
+
+	cases := []struct {
+		label string
+		host  string
+		want  limaInstance
+		ok    bool
+	}{
+		{"colima default profile", "unix://" + filepath.Join(colimaHome, "default", "docker.sock"), colima, true},
+		{"colima named profile", "unix://" + filepath.Join(colimaHome, "dev", "docker.sock"), dev, true},
+		{"lima instance", "unix://" + filepath.Join(plain.dir, "sock", "docker.sock"), plain, true},
+		{"colima profile without a VM", "unix://" + filepath.Join(colimaHome, "other", "docker.sock"), limaInstance{}, false},
+		{"docker's own socket", "unix:///var/run/docker.sock", limaInstance{}, false},
+		{"docker desktop", "unix:///Users/me/.docker/run/docker.sock", limaInstance{}, false},
+		{"tcp endpoint", "tcp://127.0.0.1:2375", limaInstance{}, false},
+		{"no context", "", limaInstance{}, false},
+	}
+	for _, c := range cases {
+		got, ok := limaInstanceFor(c.host)
+		if ok != c.ok || got != c.want {
+			t.Errorf("%s: limaInstanceFor(%q) = %+v, %v; want %+v, %v", c.label, c.host, got, ok, c.want, c.ok)
+		}
 	}
 }
